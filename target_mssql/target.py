@@ -62,6 +62,15 @@ class Targetmssql(SQLTarget):
 
     default_sink_class = mssqlSink
 
+    def _handle_max_record_age(self) -> None:
+        # remove default batch time limit
+        pass
+
+    def _process_endofpipe(self) -> None:
+        """Called after all input lines have been read."""
+        print('end of pipe')
+        self.drain_all(is_endofpipe=True)
+
 
 if __name__ == "__main__":
     Targetmssql.cli()

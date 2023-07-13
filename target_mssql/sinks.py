@@ -21,6 +21,7 @@ class mssqlSink(SQLSink):
     """mssql target sink class."""
 
     connector_class = mssqlConnector
+    MAX_SIZE_DEFAULT = 1000
 
     def __init__(
         self,
@@ -31,6 +32,9 @@ class mssqlSink(SQLSink):
         connector: SQLConnector | None = None,
     ) -> None:
         super().__init__(target, stream_name, schema, key_properties)
+        self.tmp_table_name = None
+        self.table_prepared = False
+        self.row_count = 0
         if self._config.get("table_prefix"):
             self.stream_name = self._config.get("table_prefix") + stream_name
 
@@ -105,26 +109,42 @@ class mssqlSink(SQLSink):
         Returns:
             True if table exists, False if not, None if unsure or undetectable.
         """
-        insert_sql = self.generate_insert_statement(
-            full_table_name,
-            schema,
-        )
-        if isinstance(insert_sql, str):
-            insert_sql = sqlalchemy.text(insert_sql)
 
-        self.logger.info("Inserting with SQL: %s", insert_sql)
+        # if isinstance(insert_sql, str):
+        #     insert_sql = sqlalchemy.text(insert_sql)
 
         columns = self.column_representation(schema)
 
-        # temporary fix to ensure missing properties are added
         insert_records = []
         for record in records:
-            insert_record = {}
+            insert_record = []
             for column in columns:
-                insert_record[column.name] = record.get(column.name)
-            insert_records.append(insert_record)
+                insert_record.append(record.get(column.name))
+            insert_records.append(tuple(insert_record))
 
-        self.connection.execute(insert_sql, insert_records)
+        insert_sql = self.generate_insert_statement(
+            full_table_name,
+            schema,
+            insert_records
+        )
+
+        # self.logger.info("Inserting with SQL: %s", insert_sql)
+        # insert_records = []
+        # for record in records:
+        #     insert_record = {}
+        #     for column in columns:
+        #         insert_record[column.name] = record.get(column.name)
+        #     insert_records.append(insert_record)
+
+        # use underlying DBAPI cursor to execute bulk insert
+
+        # self.connection.execute(insert_sql, insert_records)
+        cursor = self.connection.connection.cursor()
+        cursor.execute(insert_sql)
+        self.connection.connection.commit()
+
+        self.row_count += len(records)
+        print(self.row_count)
 
         if isinstance(records, list):
             return len(records)  # If list, we can quickly return record count.
@@ -164,7 +184,7 @@ class mssqlSink(SQLSink):
         join_keys = [self.conform_name(key, "column") for key in self.key_properties]
         schema = self.conform_schema(self.schema)
 
-        if self.key_properties:
+        if not self.table_prepared:
             self.logger.info(f"Preparing table {self.full_table_name}")
             self.connector.prepare_table(
                 full_table_name=self.full_table_name,
@@ -172,87 +192,55 @@ class mssqlSink(SQLSink):
                 primary_keys=join_keys,
                 as_temp_table=False,
             )
+            self.table_prepared = True
+
+        if self.tmp_table_name is None:
             # Create a temp table (Creates from the table above)
-            self.logger.info(f"Creating temp table {self.full_table_name}")
+            self.logger.info(f"Creating temp table for {self.full_table_name}")
             self.connector.create_temp_table_from_table(
                 from_table_name=self.full_table_name
             )
 
-            db_name, schema_name, table_name = self.parse_full_table_name(
-                self.full_table_name
-            )
-            tmp_table_name = (
-                f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
-            )
-            # Insert into temp table
-            self.bulk_insert_records(
-                full_table_name=tmp_table_name,
-                schema=schema,
-                records=conformed_records,
-                is_temp_table=True,
-            )
-            # Merge data from Temp table to main table
-            self.logger.info(f"Merging data from temp table to {self.full_table_name}")
-            self.merge_upsert_from_table(
-                from_table_name=tmp_table_name,
-                to_table_name=self.full_table_name,
-                schema=schema,
-                join_keys=join_keys,
-            )
+        db_name, schema_name, table_name = self.parse_full_table_name(
+            self.full_table_name
+        )
+        self.tmp_table_name = (
+            f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
+        )
 
-        else:
-            self.bulk_insert_records(
-                full_table_name=self.full_table_name,
-                schema=schema,
-                records=conformed_records,
-            )
+        # Insert into temp table
+        self.bulk_insert_records(
+            full_table_name=self.tmp_table_name,
+            schema=schema,
+            records=conformed_records,
+            is_temp_table=True,
+        )
 
-    def merge_upsert_from_table(
+
+    def drop_and_insert_from_table(
         self,
         from_table_name: str,
-        to_table_name: str,
-        schema: dict,
-        join_keys: List[str],
+        to_table_name: str
     ) -> Optional[int]:
-        """Merge upsert data from one table to another.
+        """Drop old table and insert new data back in.
         Args:
             from_table_name: The source table name.
             to_table_name: The destination table name.
-            join_keys: The merge upsert keys, or `None` to append.
-            schema: Singer Schema message.
         Return:
             The number of records copied, if detectable, or `None` if the API does not
             report number of records affected/inserted.
         """
-        # TODO think about sql injeciton,
-        # issue here https://github.com/MeltanoLabs/target-postgres/issues/22
-
-        join_condition = " and ".join(
-            [f"temp.{key} = target.{key}" for key in join_keys]
-        )
-
-        update_stmt = ", ".join(
-            [
-                f"target.{key} = temp.{key}"
-                for key in schema["properties"].keys()
-                if key not in join_keys
-            ]
-        )  # noqa
-
-        merge_sql = f"""
-            MERGE INTO {to_table_name} AS target
-            USING {from_table_name} AS temp
-            ON {join_condition}
-            WHEN MATCHED THEN
-                UPDATE SET
-                    { update_stmt }
-            WHEN NOT MATCHED THEN
-                INSERT ({", ".join(schema["properties"].keys())})
-                VALUES ({", ".join([f"temp.{key}" for key in schema["properties"].keys()])});
-        """  # nosec
+        sql_stmt = f"""
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+                TRUNCATE TABLE {to_table_name};
+                INSERT INTO {to_table_name}
+                SELECT * FROM {from_table_name};
+            COMMIT TRANSACTION;
+        """
 
         with self.connection.begin():
-            self.connection.execute(merge_sql)
+            self.connection.execute(sql_stmt)
 
     def parse_full_table_name(
         self, full_table_name: str
@@ -303,6 +291,56 @@ class mssqlSink(SQLSink):
         # strip non-alphanumeric characters, keeping - . _ and spaces
         name = re.sub(r"[^a-zA-Z0-9_\-\.\s]", "", name)
         # convert to snakecase
-        name = self.snakecase(name)
+        # name = self.snakecase(name)
         # replace leading digit
         return replace_leading_digit(name)
+    
+
+    def clean_up(self) -> None:
+        """Here we complete we merge the temp table with the source table
+        """
+        self.logger.info("Cleaning up %s", self.stream_name)
+
+        if self.tmp_table_name is not None:
+            self.drop_and_insert_from_table(
+                from_table_name=self.tmp_table_name,
+                to_table_name=self.full_table_name,
+            )
+
+    def generate_insert_statement(
+        self,
+        full_table_name: str,
+        schema: dict,
+        records: List[tuple]
+    ) -> str:
+        """Generate an insert statement for the given records.
+
+        Args:
+            full_table_name: the target table name.
+            schema: the JSON schema for the new table.
+
+        Returns:
+            An insert statement.
+        """
+        property_names = list(self.conform_schema(schema)["properties"].keys())
+        # statement = f"""\
+        #     INSERT INTO {full_table_name}
+        #     ({', '.join(property_names)})
+        #     VALUES ({', '.join([f'{name}' for name in property_names])})
+        #     """
+        statement = f"""\
+            INSERT INTO {full_table_name}
+            ({', '.join(property_names)})
+            VALUES
+        """
+        statement += ',\n '.join(str(record) for record in records)
+        return statement.rstrip()
+    
+    @property
+    def max_size(self) -> int:
+        """Get max batch size.
+
+        Returns:
+            Max number of records to batch before `is_full=True`
+        """
+        return self.MAX_SIZE_DEFAULT

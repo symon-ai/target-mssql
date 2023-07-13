@@ -69,7 +69,7 @@ class mssqlConnector(SQLConnector):
             password=config["password"],
             host=config["host"],
             port=config["port"],
-            database=config["database"],
+            database=config["database"]
         )
         return str(connection_url)
 
@@ -92,6 +92,9 @@ class mssqlConnector(SQLConnector):
             NotImplementedError: if temp tables are unsupported and as_temp_table=True.
             RuntimeError: if a variant schema is passed with no properties defined.
         """
+        print('===========================')
+        print('create empty table')
+        print(full_table_name)
         if as_temp_table:
             raise NotImplementedError("Temporary tables are not supported.")
 
@@ -381,16 +384,16 @@ class mssqlConnector(SQLConnector):
         full_table_name = (
             f"{schema_name}.{table_name}" if schema_name else f"{table_name}"
         )
-        tmp_full_table_name = (
+        tmp_table_name = (
             f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
         )
 
-        droptable = f"DROP TABLE IF EXISTS {tmp_full_table_name}"
-        self.connection.execute(droptable)
+        # droptable = f"DROP TABLE IF EXISTS {tmp_table_name}"
+        # self.connection.execute(droptable)
 
         ddl = f"""
             SELECT TOP 0 *
-            into {tmp_full_table_name}
+            into {tmp_table_name}
             FROM {full_table_name}
         """  # nosec
 
