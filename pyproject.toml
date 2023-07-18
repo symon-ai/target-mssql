@@ -9,6 +9,8 @@ keywords = [
 ]
 license = "Apache 2.0"
 
+# requests and urllib3 version must be pinned
+# https://stackoverflow.com/questions/76326096/requests-urllib3-and-cachecontrol-version-downgrade-to-working-in-poetry
 [tool.poetry.dependencies]
 python = "<3.11,>=3.7.1"
 requests = "2.28.0"
