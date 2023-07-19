@@ -14,9 +14,9 @@ class mssqlConnector(SQLConnector):
     This class handles all DDL and type conversions.
     """
 
-    allow_column_add: bool = True  # Whether ADD COLUMN is supported.
-    allow_column_rename: bool = True  # Whether RENAME COLUMN is supported.
-    allow_column_alter: bool = True  # Whether altering column types is supported.
+    allow_column_add: bool = False  # Whether ADD COLUMN is supported.
+    allow_column_rename: bool = False  # Whether RENAME COLUMN is supported.
+    allow_column_alter: bool = False  # Whether altering column types is supported.
     allow_merge_upsert: bool = True  # Whether MERGE UPSERT is supported.
     allow_temp_tables: bool = True  # Whether temp tables are supported.
 
@@ -92,9 +92,6 @@ class mssqlConnector(SQLConnector):
             NotImplementedError: if temp tables are unsupported and as_temp_table=True.
             RuntimeError: if a variant schema is passed with no properties defined.
         """
-        print('===========================')
-        print('create empty table')
-        print(full_table_name)
         if as_temp_table:
             raise NotImplementedError("Temporary tables are not supported.")
 
@@ -228,6 +225,10 @@ class mssqlConnector(SQLConnector):
             full_table_name, column_name
         )
 
+        # print(f'column name: ${column_name}')
+        # print(f'current type: ${current_type}')
+        # print(f'sql type: ${sql_type}')
+
         # Check if the existing column type and the sql type are the same
         if str(sql_type) == str(current_type):
             # The current column and sql type are the same
@@ -259,16 +260,6 @@ class mssqlConnector(SQLConnector):
                 f"from '{current_type}' to '{compatible_sql_type}'."
             ) from e
 
-        # self.connection.execute(
-        #     sqlalchemy.DDL(
-        #         "ALTER TABLE %(table)s ALTER COLUMN %(col_name)s %(col_type)s",
-        #         {
-        #             "table": full_table_name,
-        #             "col_name": column_name,
-        #             "col_type": compatible_sql_type,
-        #         },
-        #     )
-        # )
 
     def _create_empty_column(
         self,
@@ -337,6 +328,23 @@ class mssqlConnector(SQLConnector):
         Returns:
             The SQL type.
         """
+        if self._jsonschema_type_check(jsonschema_type, ("integer",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
+
+        if self._jsonschema_type_check(jsonschema_type, ("number",)):
+            if self.config.get("prefer_float_over_numeric", False):
+                return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(38, 16))
+
+        if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
+            return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
+
+        if self._jsonschema_type_check(jsonschema_type, ("object",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
+
+        if self._jsonschema_type_check(jsonschema_type, ("array",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.JSON())
+        
         if self._jsonschema_type_check(jsonschema_type, ("string",)):
             datelike_type = get_datelike_property_type(jsonschema_type)
             if datelike_type:
@@ -357,23 +365,6 @@ class mssqlConnector(SQLConnector):
             return cast(
                 sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR(maxlength)
             )
-
-        if self._jsonschema_type_check(jsonschema_type, ("integer",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
-
-        if self._jsonschema_type_check(jsonschema_type, ("number",)):
-            if self.config.get("prefer_float_over_numeric", False):
-                return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(38, 16))
-
-        if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
-            return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
-
-        if self._jsonschema_type_check(jsonschema_type, ("object",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
-
-        if self._jsonschema_type_check(jsonschema_type, ("array",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.JSON())
 
         return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
 

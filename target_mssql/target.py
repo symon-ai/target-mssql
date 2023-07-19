@@ -50,7 +50,7 @@ class Targetmssql(SQLTarget):
             description="Default target schema to write to",
         ),
         th.Property(
-            "table_prefix", th.StringType, description="Prefix to add to table name"
+            "table_name", th.StringType, description="Target table name"
         ),
         th.Property(
             "prefer_float_over_numeric",
@@ -68,7 +68,6 @@ class Targetmssql(SQLTarget):
 
     def _process_endofpipe(self) -> None:
         """Called after all input lines have been read."""
-        print('end of pipe')
         self.drain_all(is_endofpipe=True)
 
 

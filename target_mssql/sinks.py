@@ -10,6 +10,7 @@ import sqlalchemy
 from singer_sdk.helpers._conformers import replace_leading_digit
 from singer_sdk.sinks import SQLConnector, SQLSink
 from sqlalchemy import Column
+import datetime
 
 from target_mssql.connector import mssqlConnector
 
@@ -35,8 +36,10 @@ class mssqlSink(SQLSink):
         self.tmp_table_name = None
         self.table_prepared = False
         self.row_count = 0
-        if self._config.get("table_prefix"):
-            self.stream_name = self._config.get("table_prefix") + stream_name
+        # we don't take stream name from tap because it doesn't have the schema name
+        # in general we want {stream_name}.{table_name} e.g. dbo.currency
+        if self._config.get("table_name"):
+            self.stream_name = self._config.get("table_name")
 
     # Copied purely to help with type hints
     @property
@@ -84,8 +87,15 @@ class mssqlSink(SQLSink):
         """
         keys = record.keys()
         for key in keys:
+            # print(f'{key}: {record[key]}')
+            # print(f'type(record[key]): {type(record[key])}')
             if type(record[key]) in [list, dict]:
                 record[key] = json.dumps(record[key], default=str)
+            elif type(record[key]) is datetime.datetime:
+                record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+            elif 'number' in self.schema['properties'][key]['type']:
+                # can use decimal.Decimal if precision turns out really bad at the cost of speed
+                record[key] = float(record[key])
 
         return record
 
@@ -139,12 +149,13 @@ class mssqlSink(SQLSink):
         # use underlying DBAPI cursor to execute bulk insert
 
         # self.connection.execute(insert_sql, insert_records)
+        # print(insert_sql)
         cursor = self.connection.connection.cursor()
         cursor.execute(insert_sql)
         self.connection.connection.commit()
 
         self.row_count += len(records)
-        print(self.row_count)
+        print(f'Rows processed: {self.row_count}.')
 
         if isinstance(records, list):
             return len(records)  # If list, we can quickly return record count.
