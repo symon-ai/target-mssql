@@ -87,8 +87,6 @@ class mssqlSink(SQLSink):
         """
         keys = record.keys()
         for key in keys:
-            # print(f'{key}: {record[key]}')
-            # print(f'type(record[key]): {type(record[key])}')
             if type(record[key]) in [list, dict]:
                 record[key] = json.dumps(record[key], default=str)
             elif type(record[key]) is datetime.datetime:
@@ -119,10 +117,6 @@ class mssqlSink(SQLSink):
         Returns:
             True if table exists, False if not, None if unsure or undetectable.
         """
-
-        # if isinstance(insert_sql, str):
-        #     insert_sql = sqlalchemy.text(insert_sql)
-
         columns = self.column_representation(schema)
 
         insert_records = []
@@ -138,24 +132,13 @@ class mssqlSink(SQLSink):
             insert_records
         )
 
-        # self.logger.info("Inserting with SQL: %s", insert_sql)
-        # insert_records = []
-        # for record in records:
-        #     insert_record = {}
-        #     for column in columns:
-        #         insert_record[column.name] = record.get(column.name)
-        #     insert_records.append(insert_record)
-
-        # use underlying DBAPI cursor to execute bulk insert
-
-        # self.connection.execute(insert_sql, insert_records)
-        # print(insert_sql)
+        # we use the underlying cursor to execute this insert because the pymssql one has terrible performance
         cursor = self.connection.connection.cursor()
         cursor.execute(insert_sql)
         self.connection.connection.commit()
 
         self.row_count += len(records)
-        print(f'Rows processed: {self.row_count}.')
+        self.logger.info(f'Rows processed: {self.row_count}.')
 
         if isinstance(records, list):
             return len(records)  # If list, we can quickly return record count.
@@ -241,14 +224,25 @@ class mssqlSink(SQLSink):
             The number of records copied, if detectable, or `None` if the API does not
             report number of records affected/inserted.
         """
-        sql_stmt = f"""
-            SET XACT_ABORT ON;
-            BEGIN TRANSACTION;
-                TRUNCATE TABLE {to_table_name};
-                INSERT INTO {to_table_name}
-                SELECT * FROM {from_table_name};
-            COMMIT TRANSACTION;
-        """
+        # first check if we have alter access, it is most efficient if we do
+        if (self.connector.has_alter_permission(to_table_name)):
+            sql_stmt = f"""
+                SET XACT_ABORT ON;
+                BEGIN TRANSACTION;
+                    TRUNCATE TABLE {to_table_name};
+                    INSERT INTO {to_table_name}
+                    SELECT * FROM {from_table_name};
+                COMMIT TRANSACTION;
+            """
+        else:
+            sql_stmt = f"""
+                SET XACT_ABORT ON;
+                BEGIN TRANSACTION;
+                    DELETE FROM {to_table_name};
+                    INSERT INTO {to_table_name}
+                    SELECT * FROM {from_table_name};
+                COMMIT TRANSACTION;
+            """
 
         with self.connection.begin():
             self.connection.execute(sql_stmt)
@@ -308,7 +302,7 @@ class mssqlSink(SQLSink):
     
 
     def clean_up(self) -> None:
-        """Here we complete we merge the temp table with the source table
+        """Once all rows are inserted to temp table, we replace original table with temp table data.
         """
         self.logger.info("Cleaning up %s", self.stream_name)
 
@@ -334,11 +328,6 @@ class mssqlSink(SQLSink):
             An insert statement.
         """
         property_names = list(self.conform_schema(schema)["properties"].keys())
-        # statement = f"""\
-        #     INSERT INTO {full_table_name}
-        #     ({', '.join(property_names)})
-        #     VALUES ({', '.join([f'{name}' for name in property_names])})
-        #     """
         statement = f"""\
             INSERT INTO {full_table_name}
             ({', '.join(property_names)})

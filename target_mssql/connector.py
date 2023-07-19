@@ -225,10 +225,6 @@ class mssqlConnector(SQLConnector):
             full_table_name, column_name
         )
 
-        # print(f'column name: ${column_name}')
-        # print(f'current type: ${current_type}')
-        # print(f'sql type: ${sql_type}')
-
         # Check if the existing column type and the sql type are the same
         if str(sql_type) == str(current_type):
             # The current column and sql type are the same
@@ -369,7 +365,7 @@ class mssqlConnector(SQLConnector):
         return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
 
     def create_temp_table_from_table(self, from_table_name):
-        """Temp table from another table."""
+        """Create temp table using source table columns."""
 
         db_name, schema_name, table_name = self.parse_full_table_name(from_table_name)
         full_table_name = (
@@ -379,13 +375,20 @@ class mssqlConnector(SQLConnector):
             f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
         )
 
-        # droptable = f"DROP TABLE IF EXISTS {tmp_table_name}"
-        # self.connection.execute(droptable)
-
         ddl = f"""
             SELECT TOP 0 *
             into {tmp_table_name}
             FROM {full_table_name}
-        """  # nosec
+        """
 
         self.connection.execute(ddl)
+
+    def has_alter_permission(self, to_table_name):
+        sql_stmt = f"SELECT HAS_PERMS_BY_NAME('{to_table_name}', 'OBJECT', 'ALTER')"
+        try:
+            result = self.connection.execute(sql_stmt)
+            for row in result:
+                if row[0] == 1:
+                    return True
+        except Exception:
+            return False
