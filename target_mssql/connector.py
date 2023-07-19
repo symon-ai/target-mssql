@@ -390,5 +390,6 @@ class mssqlConnector(SQLConnector):
             for row in result:
                 if row[0] == 1:
                     return True
+            return False
         except Exception:
             return False
