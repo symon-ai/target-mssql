@@ -14,9 +14,9 @@ class mssqlConnector(SQLConnector):
     This class handles all DDL and type conversions.
     """
 
-    allow_column_add: bool = True  # Whether ADD COLUMN is supported.
-    allow_column_rename: bool = True  # Whether RENAME COLUMN is supported.
-    allow_column_alter: bool = True  # Whether altering column types is supported.
+    allow_column_add: bool = False  # Whether ADD COLUMN is supported.
+    allow_column_rename: bool = False  # Whether RENAME COLUMN is supported.
+    allow_column_alter: bool = False  # Whether altering column types is supported.
     allow_merge_upsert: bool = True  # Whether MERGE UPSERT is supported.
     allow_temp_tables: bool = True  # Whether temp tables are supported.
 
@@ -69,7 +69,7 @@ class mssqlConnector(SQLConnector):
             password=config["password"],
             host=config["host"],
             port=config["port"],
-            database=config["database"],
+            database=config["database"]
         )
         return str(connection_url)
 
@@ -256,16 +256,6 @@ class mssqlConnector(SQLConnector):
                 f"from '{current_type}' to '{compatible_sql_type}'."
             ) from e
 
-        # self.connection.execute(
-        #     sqlalchemy.DDL(
-        #         "ALTER TABLE %(table)s ALTER COLUMN %(col_name)s %(col_type)s",
-        #         {
-        #             "table": full_table_name,
-        #             "col_name": column_name,
-        #             "col_type": compatible_sql_type,
-        #         },
-        #     )
-        # )
 
     def _create_empty_column(
         self,
@@ -334,6 +324,23 @@ class mssqlConnector(SQLConnector):
         Returns:
             The SQL type.
         """
+        if self._jsonschema_type_check(jsonschema_type, ("integer",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
+
+        if self._jsonschema_type_check(jsonschema_type, ("number",)):
+            if self.config.get("prefer_float_over_numeric", False):
+                return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(38, 16))
+
+        if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
+            return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
+
+        if self._jsonschema_type_check(jsonschema_type, ("object",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
+
+        if self._jsonschema_type_check(jsonschema_type, ("array",)):
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.JSON())
+        
         if self._jsonschema_type_check(jsonschema_type, ("string",)):
             datelike_type = get_datelike_property_type(jsonschema_type)
             if datelike_type:
@@ -355,43 +362,34 @@ class mssqlConnector(SQLConnector):
                 sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR(maxlength)
             )
 
-        if self._jsonschema_type_check(jsonschema_type, ("integer",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
-
-        if self._jsonschema_type_check(jsonschema_type, ("number",)):
-            if self.config.get("prefer_float_over_numeric", False):
-                return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(38, 16))
-
-        if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
-            return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
-
-        if self._jsonschema_type_check(jsonschema_type, ("object",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
-
-        if self._jsonschema_type_check(jsonschema_type, ("array",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.JSON())
-
         return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
 
     def create_temp_table_from_table(self, from_table_name):
-        """Temp table from another table."""
+        """Create temp table using source table columns."""
 
         db_name, schema_name, table_name = self.parse_full_table_name(from_table_name)
         full_table_name = (
             f"{schema_name}.{table_name}" if schema_name else f"{table_name}"
         )
-        tmp_full_table_name = (
+        tmp_table_name = (
             f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
         )
 
-        droptable = f"DROP TABLE IF EXISTS {tmp_full_table_name}"
-        self.connection.execute(droptable)
-
         ddl = f"""
             SELECT TOP 0 *
-            into {tmp_full_table_name}
+            into {tmp_table_name}
             FROM {full_table_name}
-        """  # nosec
+        """
 
         self.connection.execute(ddl)
+
+    def has_alter_permission(self, to_table_name):
+        sql_stmt = f"SELECT HAS_PERMS_BY_NAME('{to_table_name}', 'OBJECT', 'ALTER')"
+        try:
+            result = self.connection.execute(sql_stmt)
+            for row in result:
+                if row[0] == 1:
+                    return True
+            return False
+        except Exception:
+            return False

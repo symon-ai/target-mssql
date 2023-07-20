@@ -1,0 +1,8 @@
+{
+  "host": "example-host.com",
+  "port": "1234",
+  "database": "DB-name",
+  "table_prefix": "table-name",
+  "username": "username",
+  "password": "password"
+}

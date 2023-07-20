@@ -144,3 +144,5 @@ poetry.lock
 .dccache
 _jottings.py
 .security-notes.json
+
+test_data/
