@@ -27,9 +27,13 @@ def raise_error(error_info, config):
 
 def generate_error_message(e, details=None, parsed=None):
     msg = parsed if parsed is not None else str(e)
+    error_code_map = {
+        'OperationalError': 'MsSqlOperationalError',
+        'IntegrityError': 'MsSqlIntegrityError'
+    }
     error_info = {
         'message': msg,
-        'code': type(e).__name__,
+        'code': error_code_map.get(type(e).__name__, type(e).__name__),
         'traceback': traceback.format_exc()
     }
     

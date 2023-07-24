@@ -428,3 +428,19 @@ class mssqlConnector(SQLConnector):
                 property_name,
                 self.to_sql_type(property_def),
             )
+
+    def table_exists(self, full_table_name: str) -> bool:
+        """Determine if the target table already exists.
+
+        Args:
+            full_table_name: the target table name.
+
+        Returns:
+            True if table exists, False if not, None if unsure or undetectable.
+        """
+        _, schema_name, table_name = self.parse_full_table_name(full_table_name)
+
+        return t.cast(
+            bool,
+            sqlalchemy.inspect(self._engine).has_table(table_name, schema_name),
+        )

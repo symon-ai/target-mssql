@@ -13,7 +13,7 @@ from sqlalchemy import Column
 import datetime
 
 from target_mssql.connector import mssqlConnector
-from target_mssql.utils import generate_error_message, process_error_info, SymonException
+from target_mssql.utils import generate_error_message, process_error_info
 
 if TYPE_CHECKING:
     from singer_sdk.plugin_base import PluginBase
@@ -128,11 +128,16 @@ class mssqlSink(SQLSink):
         columns = self.column_representation(schema)
 
         insert_records = []
+        # we want something like ('col1_value', 'col2_value', NULL, '1.2345') in the end
         for record in records:
-            insert_record = []
+            insert_record = '('
             for column in columns:
-                insert_record.append(record.get(column.name))
-            insert_records.append(tuple(insert_record))
+                if record.get(column.name) is not None:
+                    insert_record += f"'{record.get(column.name)}', "
+                else:
+                    # convert None to NULL
+                    insert_record += 'NULL, '
+            insert_records.append(insert_record.rstrip(', ') + ')')
 
         insert_sql = self.generate_insert_statement(
             full_table_name,
@@ -150,8 +155,18 @@ class mssqlSink(SQLSink):
             self.logger.info(f'Rows processed: {self.row_count}.')
         except Exception as e:
             # pymssql error msgs are not very reader friendly
-            msg = re.search(", b'(.*)DB-Lib", str(e)).group(1)
-            self.error_info = generate_error_message(e, None, msg)
+            # OperationalError - e.g. when cursor can't convert incoming data to a suitable SQL type
+            msg = re.search(", b'(.*)DB-Lib", str(e))
+            if msg is not None:
+                self.error_info = generate_error_message(e, None, msg.group(1))
+                raise
+            # IntegrityError - e.g. when attempting to insert NULL into a column that cannot be NULL
+            msg = re.search('b"(.*),.*; (.*)DB-Lib', str(e))
+            if msg is not None:
+                self.error_info = generate_error_message(e, None, f'{msg.group(1)} {msg.group(2)}')
+                raise
+            # unexpected error, log it and improve this message after
+            self.error_info = generate_error_message(e)
             raise
         finally:
             process_error_info(self.error_info, self.config)
@@ -347,7 +362,7 @@ class mssqlSink(SQLSink):
             ({', '.join(property_names)})
             VALUES
         """
-        statement += ',\n '.join(str(record) for record in records)
+        statement += ',\n '.join(record for record in records)
         return statement.rstrip()
     
     def _validate_and_parse(self, record: dict) -> dict:
