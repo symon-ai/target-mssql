@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, cast
+import typing as t
 
 import sqlalchemy
 from singer_sdk.helpers._typing import get_datelike_property_type
 from singer_sdk.sinks import SQLConnector
 from sqlalchemy.dialects import mssql
+from target_mssql.utils import raise_error
 
 
 class mssqlConnector(SQLConnector):
@@ -240,11 +242,12 @@ class mssqlConnector(SQLConnector):
             return
 
         if not self.allow_column_alter:
-            raise NotImplementedError(
-                "Altering columns is not supported. "
-                f"Could not convert column '{full_table_name}.{column_name}' "
-                f"from '{current_type}' to '{compatible_sql_type}'."
-            )
+            error_info = {
+                'message': f'Schema mismatch for column {column_name} with data type {current_type} to SQL type {sql_type}.',
+                'code': 'MsSqlTableSchemaMismatch'
+            }
+            raise_error(error_info, self.config)
+
         try:
             self.connection.execute(
                 f"""ALTER TABLE { str(full_table_name) }
@@ -272,7 +275,11 @@ class mssqlConnector(SQLConnector):
             NotImplementedError: if adding columns is not supported.
         """
         if not self.allow_column_add:
-            raise NotImplementedError("Adding columns is not supported.")
+            error_info = {
+                'message': f'Data source contain one or more columns that does not exist in {full_table_name}.',
+                'code': 'MsSqlTableSchemaMismatch'
+            }
+            raise_error(error_info, self.config)
 
         create_column_clause = sqlalchemy.schema.CreateColumn(
             sqlalchemy.Column(
@@ -393,3 +400,31 @@ class mssqlConnector(SQLConnector):
             return False
         except Exception:
             return False
+        
+    def prepare_table(
+        self,
+        full_table_name: str,
+        schema: dict,
+        primary_keys: list[str],
+        partition_keys: list[str] | None = None,
+        as_temp_table: bool = False,  # noqa: FBT002, FBT001
+    ) -> None:
+        """Adapt target table to provided schema if possible.
+
+        Args:
+            full_table_name: the target table name.
+            schema: the JSON Schema for the table.
+            primary_keys: list of key properties.
+            partition_keys: list of partition keys.
+            as_temp_table: True to create a temp table.
+        """
+        if not self.table_exists(full_table_name=full_table_name):
+            error_info = {'message': f'Table {full_table_name} does not exist or you have no permission to it.', 'code': 'MsSqlTableNotFound'}
+            raise_error(error_info, self.config)
+
+        for property_name, property_def in schema["properties"].items():
+            self.prepare_column(
+                full_table_name,
+                property_name,
+                self.to_sql_type(property_def),
+            )

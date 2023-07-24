@@ -13,6 +13,7 @@ from sqlalchemy import Column
 import datetime
 
 from target_mssql.connector import mssqlConnector
+from target_mssql.utils import generate_error_message, process_error_info, SymonException
 
 if TYPE_CHECKING:
     from singer_sdk.plugin_base import PluginBase
@@ -36,6 +37,7 @@ class mssqlSink(SQLSink):
         self.tmp_table_name = None
         self.table_prepared = False
         self.row_count = 0
+        self.error_info = None
         # we don't take stream name from tap because it doesn't have the schema name
         # in general we want {stream_name}.{table_name} e.g. dbo.currency
         if self._config.get("table_name"):
@@ -85,15 +87,21 @@ class mssqlSink(SQLSink):
         Returns:
             A new, processed record.
         """
-        keys = record.keys()
-        for key in keys:
-            if type(record[key]) in [list, dict]:
-                record[key] = json.dumps(record[key], default=str)
-            elif type(record[key]) is datetime.datetime:
-                record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
-            elif 'number' in self.schema['properties'][key]['type']:
-                # can use decimal.Decimal if precision turns out really bad at the cost of speed
-                record[key] = float(record[key])
+        try:
+            keys = record.keys()
+            for key in keys:
+                if type(record[key]) in [list, dict]:
+                    record[key] = json.dumps(record[key], default=str)
+                elif type(record[key]) is datetime.datetime:
+                    record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+                elif 'number' in self.schema['properties'][key]['type']:
+                    # can use decimal.Decimal if precision turns out really bad at the cost of speed
+                    record[key] = float(record[key])
+        except Exception as e:
+            self.error_info = generate_error_message(e)
+            raise
+        finally:
+            process_error_info(self.error_info, self.config)
 
         return record
 
@@ -132,13 +140,21 @@ class mssqlSink(SQLSink):
             insert_records
         )
 
-        # we use the underlying cursor to execute this insert because the pymssql one has terrible performance
-        cursor = self.connection.connection.cursor()
-        cursor.execute(insert_sql)
-        self.connection.connection.commit()
+        try:
+            # use the underlying cursor to execute this insert for better performance
+            cursor = self.connection.connection.cursor()
+            cursor.execute(insert_sql)
+            self.connection.connection.commit()
 
-        self.row_count += len(records)
-        self.logger.info(f'Rows processed: {self.row_count}.')
+            self.row_count += len(records)
+            self.logger.info(f'Rows processed: {self.row_count}.')
+        except Exception as e:
+            # pymssql error msgs are not very reader friendly
+            msg = re.search(", b'(.*)DB-Lib", str(e)).group(1)
+            self.error_info = generate_error_message(e, None, msg)
+            raise
+        finally:
+            process_error_info(self.error_info, self.config)
 
         if isinstance(records, list):
             return len(records)  # If list, we can quickly return record count.
@@ -291,13 +307,11 @@ class mssqlSink(SQLSink):
             name: Property name.
             object_type: One of ``database``, ``schema``, ``table`` or ``column``.
         Returns:
-            The name transformed to snake case.
+            The name that ms sql would accept.
         """
         # strip non-alphanumeric characters, keeping - . _ and spaces
         name = re.sub(r"[^a-zA-Z0-9_\-\.\s]", "", name)
-        # convert to snakecase
-        # name = self.snakecase(name)
-        # replace leading digit
+
         return replace_leading_digit(name)
     
 
@@ -335,6 +349,30 @@ class mssqlSink(SQLSink):
         """
         statement += ',\n '.join(str(record) for record in records)
         return statement.rstrip()
+    
+    def _validate_and_parse(self, record: dict) -> dict:
+        """Validate or repair the record, parsing to python-native types as needed.
+
+        Args:
+            record: Individual record in the stream.
+
+        Returns:
+            record
+        """
+        try:
+            self._validator.validate(record)
+            self._parse_timestamps_in_record(
+                record=record,
+                schema=self.schema,
+                treatment=self.datetime_error_treatment,
+            )
+        except Exception as e:
+            msg = re.search("(.*)\n", str(e)).group(1)
+            self.error_info = generate_error_message(e, None, msg)
+            raise
+        finally:
+            process_error_info(self.error_info, self.config)
+        return record
     
     @property
     def max_size(self) -> int:
