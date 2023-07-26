@@ -133,7 +133,10 @@ class mssqlSink(SQLSink):
             insert_record = '('
             for column in columns:
                 if record.get(column.name) is not None:
-                    insert_record += f"'{record.get(column.name)}', "
+                    if 'number' in schema['properties'][column.name]['type']:
+                        insert_record += f"{record.get(column.name)}, "
+                    else:
+                        insert_record += f"'{record.get(column.name)}', "
                 else:
                     # convert None to NULL
                     insert_record += 'NULL, '
