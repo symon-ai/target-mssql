@@ -163,6 +163,11 @@ class mssqlSink(SQLSink):
             if msg is not None:
                 self.error_info = generate_error_message(e, None, msg.group(1))
                 raise
+            # attempting to insert value into ID column
+            msg = re.search(', b"(.*) when IDENTITY_INSERT is set to OFF', str(e))
+            if msg is not None:
+                self.error_info = generate_error_message(e, None, msg.group(1))
+                raise
             # IntegrityError - e.g. when attempting to insert NULL into a column that cannot be NULL
             msg = re.search('b"(.*),.*; (.*)DB-Lib', str(e))
             if msg is not None:
