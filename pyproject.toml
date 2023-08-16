@@ -17,6 +17,7 @@ requests = "2.28.0"
 singer-sdk = "==0.13.0"
 pymssql = ">=2.2.5"
 urllib3 = "1.26.15"
+pyodbc = "^4.0.39"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"

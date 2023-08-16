@@ -127,20 +127,35 @@ class mssqlSink(SQLSink):
         """
         columns = self.column_representation(schema)
 
-        insert_records = []
+        # insert_records = []
         # we want something like ('col1_value', 'col2_value', NULL, '1.2345') in the end
+        # for record in records:
+        #     insert_record = '('
+        #     for column in columns:
+        #         if record.get(column.name) is not None:
+        #             if 'number' in schema['properties'][column.name]['type']:
+        #                 insert_record += f"{record.get(column.name)}, "
+        #             else:
+        #                 insert_record += f"'{self.string_escape_value(record.get(column.name))}', "
+        #         else:
+        #             # convert None to NULL
+        #             insert_record += 'NULL, '
+        #     insert_records.append(insert_record.rstrip(', ') + ')')
+
+        insert_records = []
         for record in records:
-            insert_record = '('
+            insert_record = []
             for column in columns:
-                if record.get(column.name) is not None:
-                    if 'number' in schema['properties'][column.name]['type']:
-                        insert_record += f"{record.get(column.name)}, "
+                if 'number' in schema['properties'][column.name]['type']:
+                    if isinstance(column.type, sqlalchemy.types.NUMERIC):
+                        insert_record.append(int(record.get(column.name)))
+                    elif isinstance(column.type, sqlalchemy.types.FLOAT):
+                        insert_record.append(float(record.get(column.name)))
                     else:
-                        insert_record += f"'{record.get(column.name)}', "
+                        generate_error_message(f"Column type mismatch in column '{column.name}' with value '{record.get(column.name)}'.")
                 else:
-                    # convert None to NULL
-                    insert_record += 'NULL, '
-            insert_records.append(insert_record.rstrip(', ') + ')')
+                    insert_record.append(record.get(column.name))
+            insert_records.append(tuple(insert_record))
 
         insert_sql = self.generate_insert_statement(
             full_table_name,
@@ -151,7 +166,9 @@ class mssqlSink(SQLSink):
         try:
             # use the underlying cursor to execute this insert for better performance
             cursor = self.connection.connection.cursor()
-            cursor.execute(insert_sql)
+            cursor.fast_executemany = True
+            # cursor.execute(insert_sql)
+            cursor.executemany(insert_sql, insert_records)
             self.connection.connection.commit()
 
             self.row_count += len(records)
@@ -336,7 +353,6 @@ class mssqlSink(SQLSink):
         name = re.sub(r"[^a-zA-Z0-9_\-\.\s]", "", name)
 
         return replace_leading_digit(name)
-    
 
     def clean_up(self) -> None:
         """Once all rows are inserted to temp table, we replace original table with temp table data.
@@ -368,10 +384,11 @@ class mssqlSink(SQLSink):
         statement = f"""\
             INSERT INTO {full_table_name}
             ({', '.join(property_names)})
-            VALUES
+            VALUES ({','.join('?' for _ in range(len(property_names)))})
         """
-        statement += ',\n '.join(record for record in records)
-        return statement.rstrip()
+        # statement += ',\n '.join(record for record in records)
+        # return statement.rstrip()
+        return statement
     
     def _validate_and_parse(self, record: dict) -> dict:
         """Validate or repair the record, parsing to python-native types as needed.

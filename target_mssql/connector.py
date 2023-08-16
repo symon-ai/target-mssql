@@ -66,12 +66,13 @@ class mssqlConnector(SQLConnector):
             return config["sqlalchemy_url"]
 
         connection_url = sqlalchemy.engine.url.URL.create(
-            drivername="mssql+pymssql",
+            drivername="mssql+pyodbc",
             username=config["username"],
             password=config["password"],
             host=config["host"],
             port=config["port"],
-            database=config["database"]
+            database=config["database"],
+            query={'DRIVER': 'ODBC Driver 18 for SQL Server', 'TrustServerCertificate': 'yes'}
         )
         return str(connection_url)
 
