@@ -11,6 +11,7 @@ from singer_sdk.helpers._conformers import replace_leading_digit
 from singer_sdk.sinks import SQLConnector, SQLSink
 from sqlalchemy import Column
 import datetime
+from decimal import Decimal
 
 from target_mssql.connector import mssqlConnector
 from target_mssql.utils import generate_error_message, process_error_info
@@ -38,10 +39,12 @@ class mssqlSink(SQLSink):
         self.table_prepared = False
         self.row_count = 0
         self.error_info = None
+        self.target_table_column_types = None
         # we don't take stream name from tap because it doesn't have the schema name
         # in general we want {stream_name}.{table_name} e.g. dbo.currency
         if self._config.get("table_name"):
             self.stream_name = self._config.get("table_name")
+        # decimals
 
     # Copied purely to help with type hints
     @property
@@ -95,8 +98,7 @@ class mssqlSink(SQLSink):
                 elif type(record[key]) is datetime.datetime:
                     record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                 elif 'number' in self.schema['properties'][key]['type']:
-                    # can use decimal.Decimal if precision turns out really bad at the cost of speed
-                    record[key] = float(record[key])
+                    record[key] = Decimal(record[key])
         except Exception as e:
             self.error_info = generate_error_message(e)
             raise
@@ -147,12 +149,12 @@ class mssqlSink(SQLSink):
             insert_record = []
             for column in columns:
                 if 'number' in schema['properties'][column.name]['type']:
-                    if isinstance(column.type, sqlalchemy.types.NUMERIC):
+                    target_type = self.target_table_column_types.get(column.name)
+                    # these types cannot have decimal places or we fail during insert
+                    if target_type == 'int' or target_type == 'bigint' or target_type == 'bit':
                         insert_record.append(int(record.get(column.name)))
-                    elif isinstance(column.type, sqlalchemy.types.FLOAT):
-                        insert_record.append(float(record.get(column.name)))
                     else:
-                        generate_error_message(f"Column type mismatch in column '{column.name}' with value '{record.get(column.name)}'.")
+                        insert_record.append(str(record.get(column.name)))
                 else:
                     insert_record.append(record.get(column.name))
             insert_records.append(tuple(insert_record))
@@ -167,7 +169,6 @@ class mssqlSink(SQLSink):
             # use the underlying cursor to execute this insert for better performance
             cursor = self.connection.connection.cursor()
             cursor.fast_executemany = True
-            # cursor.execute(insert_sql)
             cursor.executemany(insert_sql, insert_records)
             self.connection.connection.commit()
 
@@ -250,6 +251,9 @@ class mssqlSink(SQLSink):
             self.connector.create_temp_table_from_table(
                 from_table_name=self.full_table_name
             )
+
+        if self.target_table_column_types is None:
+            self.target_table_column_types = self.connector.get_target_table_column_types(self.full_table_name)
 
         db_name, schema_name, table_name = self.parse_full_table_name(
             self.full_table_name
