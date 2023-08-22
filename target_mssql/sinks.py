@@ -387,11 +387,9 @@ class mssqlSink(SQLSink):
         property_names = list(self.conform_schema(schema)["properties"].keys())
         statement = f"""\
             INSERT INTO {full_table_name}
-            ({', '.join(property_names)})
+            ({', '.join(f'[{prop}]' for prop in property_names)})
             VALUES ({','.join('?' for _ in range(len(property_names)))})
         """
-        # statement += ',\n '.join(record for record in records)
-        # return statement.rstrip()
         return statement
     
     def _validate_and_parse(self, record: dict) -> dict:
@@ -426,3 +424,4 @@ class mssqlSink(SQLSink):
             Max number of records to batch before `is_full=True`
         """
         return self.MAX_SIZE_DEFAULT
+    
