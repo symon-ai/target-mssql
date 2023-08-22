@@ -129,21 +129,6 @@ class mssqlSink(SQLSink):
         """
         columns = self.column_representation(schema)
 
-        # insert_records = []
-        # we want something like ('col1_value', 'col2_value', NULL, '1.2345') in the end
-        # for record in records:
-        #     insert_record = '('
-        #     for column in columns:
-        #         if record.get(column.name) is not None:
-        #             if 'number' in schema['properties'][column.name]['type']:
-        #                 insert_record += f"{record.get(column.name)}, "
-        #             else:
-        #                 insert_record += f"'{self.string_escape_value(record.get(column.name))}', "
-        #         else:
-        #             # convert None to NULL
-        #             insert_record += 'NULL, '
-        #     insert_records.append(insert_record.rstrip(', ') + ')')
-
         insert_records = []
         for record in records:
             insert_record = []
@@ -177,19 +162,9 @@ class mssqlSink(SQLSink):
         except Exception as e:
             # pymssql error msgs are not very reader friendly
             # OperationalError - e.g. when cursor can't convert incoming data to a suitable SQL type
-            msg = re.search(", b'(.*)DB-Lib", str(e))
+            msg = re.search("\[ODBC Driver 18 for SQL Server\]\[SQL Server\](.*) \([0-9]*\) \(SQLExecute\)", str(e))
             if msg is not None:
-                self.error_info = generate_error_message(e, None, msg.group(1))
-                raise
-            # attempting to insert value into ID column
-            msg = re.search(', b"(.*) when IDENTITY_INSERT is set to OFF', str(e))
-            if msg is not None:
-                self.error_info = generate_error_message(e, None, msg.group(1))
-                raise
-            # IntegrityError - e.g. when attempting to insert NULL into a column that cannot be NULL
-            msg = re.search('b"(.*),.*; (.*)DB-Lib', str(e))
-            if msg is not None:
-                self.error_info = generate_error_message(e, None, f'{msg.group(1)} {msg.group(2)}')
+                self.error_info = generate_error_message(e, None, msg.group(1).replace('#', ''))
                 raise
             # unexpected error, log it and improve this message after
             self.error_info = generate_error_message(e)
