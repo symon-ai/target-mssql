@@ -66,12 +66,13 @@ class mssqlConnector(SQLConnector):
             return config["sqlalchemy_url"]
 
         connection_url = sqlalchemy.engine.url.URL.create(
-            drivername="mssql+pymssql",
+            drivername="mssql+pyodbc",
             username=config["username"],
             password=config["password"],
             host=config["host"],
             port=config["port"],
-            database=config["database"]
+            database=config["database"],
+            query={'DRIVER': 'ODBC Driver 18 for SQL Server', 'TrustServerCertificate': 'yes'}
         )
         return str(connection_url)
 
@@ -335,12 +336,10 @@ class mssqlConnector(SQLConnector):
             return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
 
         if self._jsonschema_type_check(jsonschema_type, ("number",)):
-            if self.config.get("prefer_float_over_numeric", False):
-                return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(38, 16))
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.FLOAT())
 
         if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
-            return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BOOLEAN())
 
         if self._jsonschema_type_check(jsonschema_type, ("object",)):
             return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.VARCHAR())
@@ -382,13 +381,26 @@ class mssqlConnector(SQLConnector):
             f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
         )
 
-        ddl = f"""
+        stmt = f"""
             SELECT TOP 0 *
             into {tmp_table_name}
             FROM {full_table_name}
         """
 
-        self.connection.execute(ddl)
+        self.connection.execute(stmt)
+
+    def get_target_table_column_types(self, from_table_name):
+        db_name, schema_name, table_name = self.parse_full_table_name(from_table_name)
+        stmt = f"""
+            SELECT COLUMN_NAME, DATA_TYPE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = '{schema_name}' and TABLE_NAME = '{table_name}';
+        """
+        result = self.connection.execute(stmt)
+        target_table_schema = {}
+        for row in result:
+            target_table_schema[row[0]] = row[1]
+        return target_table_schema
 
     def has_alter_permission(self, to_table_name):
         sql_stmt = f"SELECT HAS_PERMS_BY_NAME('{to_table_name}', 'OBJECT', 'ALTER')"

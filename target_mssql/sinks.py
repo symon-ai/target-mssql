@@ -11,6 +11,7 @@ from singer_sdk.helpers._conformers import replace_leading_digit
 from singer_sdk.sinks import SQLConnector, SQLSink
 from sqlalchemy import Column
 import datetime
+from decimal import Decimal
 
 from target_mssql.connector import mssqlConnector
 from target_mssql.utils import generate_error_message, process_error_info
@@ -23,7 +24,7 @@ class mssqlSink(SQLSink):
     """mssql target sink class."""
 
     connector_class = mssqlConnector
-    MAX_SIZE_DEFAULT = 1000
+    MAX_SIZE_DEFAULT = 10000
 
     def __init__(
         self,
@@ -38,6 +39,7 @@ class mssqlSink(SQLSink):
         self.table_prepared = False
         self.row_count = 0
         self.error_info = None
+        self.target_table_column_types = None
         # we don't take stream name from tap because it doesn't have the schema name
         # in general we want {stream_name}.{table_name} e.g. dbo.currency
         if self._config.get("table_name"):
@@ -95,8 +97,7 @@ class mssqlSink(SQLSink):
                 elif type(record[key]) is datetime.datetime:
                     record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                 elif 'number' in self.schema['properties'][key]['type']:
-                    # can use decimal.Decimal if precision turns out really bad at the cost of speed
-                    record[key] = float(record[key])
+                    record[key] = Decimal(record[key])
         except Exception as e:
             self.error_info = generate_error_message(e)
             raise
@@ -128,19 +129,19 @@ class mssqlSink(SQLSink):
         columns = self.column_representation(schema)
 
         insert_records = []
-        # we want something like ('col1_value', 'col2_value', NULL, '1.2345') in the end
         for record in records:
-            insert_record = '('
+            insert_record = []
             for column in columns:
-                if record.get(column.name) is not None:
-                    if 'number' in schema['properties'][column.name]['type']:
-                        insert_record += f"{record.get(column.name)}, "
+                if 'number' in schema['properties'][column.name]['type']:
+                    target_type = self.target_table_column_types.get(column.name)
+                    # these types cannot have decimal places or we fail during insert
+                    if target_type == 'int' or target_type == 'bigint' or target_type == 'bit':
+                        insert_record.append(int(record.get(column.name)))
                     else:
-                        insert_record += f"'{record.get(column.name)}', "
+                        insert_record.append(str(record.get(column.name)))
                 else:
-                    # convert None to NULL
-                    insert_record += 'NULL, '
-            insert_records.append(insert_record.rstrip(', ') + ')')
+                    insert_record.append(record.get(column.name))
+            insert_records.append(tuple(insert_record))
 
         insert_sql = self.generate_insert_statement(
             full_table_name,
@@ -151,27 +152,16 @@ class mssqlSink(SQLSink):
         try:
             # use the underlying cursor to execute this insert for better performance
             cursor = self.connection.connection.cursor()
-            cursor.execute(insert_sql)
+            cursor.fast_executemany = True
+            cursor.executemany(insert_sql, insert_records)
             self.connection.connection.commit()
 
             self.row_count += len(records)
             self.logger.info(f'Rows processed: {self.row_count}.')
         except Exception as e:
-            # pymssql error msgs are not very reader friendly
-            # OperationalError - e.g. when cursor can't convert incoming data to a suitable SQL type
-            msg = re.search(", b'(.*)DB-Lib", str(e))
+            msg = re.search("\[ODBC Driver 18 for SQL Server\]\[SQL Server\](.*) \([0-9]*\) \(SQLExecute\)", str(e))
             if msg is not None:
-                self.error_info = generate_error_message(e, None, msg.group(1))
-                raise
-            # attempting to insert value into ID column
-            msg = re.search(', b"(.*) when IDENTITY_INSERT is set to OFF', str(e))
-            if msg is not None:
-                self.error_info = generate_error_message(e, None, msg.group(1))
-                raise
-            # IntegrityError - e.g. when attempting to insert NULL into a column that cannot be NULL
-            msg = re.search('b"(.*),.*; (.*)DB-Lib', str(e))
-            if msg is not None:
-                self.error_info = generate_error_message(e, None, f'{msg.group(1)} {msg.group(2)}')
+                self.error_info = generate_error_message(e, None, msg.group(1).replace('#', ''))
                 raise
             # unexpected error, log it and improve this message after
             self.error_info = generate_error_message(e)
@@ -233,6 +223,9 @@ class mssqlSink(SQLSink):
             self.connector.create_temp_table_from_table(
                 from_table_name=self.full_table_name
             )
+
+        if self.target_table_column_types is None:
+            self.target_table_column_types = self.connector.get_target_table_column_types(self.full_table_name)
 
         db_name, schema_name, table_name = self.parse_full_table_name(
             self.full_table_name
@@ -336,7 +329,6 @@ class mssqlSink(SQLSink):
         name = re.sub(r"[^a-zA-Z0-9_\-\.\s]", "", name)
 
         return replace_leading_digit(name)
-    
 
     def clean_up(self) -> None:
         """Once all rows are inserted to temp table, we replace original table with temp table data.
@@ -367,11 +359,10 @@ class mssqlSink(SQLSink):
         property_names = list(self.conform_schema(schema)["properties"].keys())
         statement = f"""\
             INSERT INTO {full_table_name}
-            ({', '.join(property_names)})
-            VALUES
+            ({', '.join(f'[{prop}]' for prop in property_names)})
+            VALUES ({','.join('?' for _ in range(len(property_names)))})
         """
-        statement += ',\n '.join(record for record in records)
-        return statement.rstrip()
+        return statement
     
     def _validate_and_parse(self, record: dict) -> dict:
         """Validate or repair the record, parsing to python-native types as needed.
@@ -405,3 +396,4 @@ class mssqlSink(SQLSink):
             Max number of records to batch before `is_full=True`
         """
         return self.MAX_SIZE_DEFAULT
+    
