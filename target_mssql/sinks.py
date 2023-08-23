@@ -24,7 +24,7 @@ class mssqlSink(SQLSink):
     """mssql target sink class."""
 
     connector_class = mssqlConnector
-    MAX_SIZE_DEFAULT = 1000
+    MAX_SIZE_DEFAULT = 10000
 
     def __init__(
         self,
@@ -44,7 +44,6 @@ class mssqlSink(SQLSink):
         # in general we want {stream_name}.{table_name} e.g. dbo.currency
         if self._config.get("table_name"):
             self.stream_name = self._config.get("table_name")
-        # decimals
 
     # Copied purely to help with type hints
     @property
@@ -160,8 +159,6 @@ class mssqlSink(SQLSink):
             self.row_count += len(records)
             self.logger.info(f'Rows processed: {self.row_count}.')
         except Exception as e:
-            # pymssql error msgs are not very reader friendly
-            # OperationalError - e.g. when cursor can't convert incoming data to a suitable SQL type
             msg = re.search("\[ODBC Driver 18 for SQL Server\]\[SQL Server\](.*) \([0-9]*\) \(SQLExecute\)", str(e))
             if msg is not None:
                 self.error_info = generate_error_message(e, None, msg.group(1).replace('#', ''))
