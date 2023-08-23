@@ -136,6 +136,7 @@ dmypy.json
 .pyre/
 
 # dev
+*.DS_Store
 ._*
 .devcontainer/
 plugins/
