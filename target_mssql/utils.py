@@ -29,11 +29,18 @@ def generate_error_message(e, details=None, parsed=None):
     msg = parsed if parsed is not None else str(e)
     error_code_map = {
         'OperationalError': 'MsSqlOperationalError',
-        'IntegrityError': 'MsSqlIntegrityError'
+        'IntegrityError': 'MsSqlIntegrityError',
+        'DataError': 'MsSqlDataError',
+        'ProgrammingError': 'MsSqlProgrammingError',
+        'NotSupportedError': 'MsSqlNotSupportedError'
     }
+    # Convert error message into something more obvious
+    if 'String or binary data would be truncated' in msg:
+        msg = 'Attempting to insert data into one or more columns which exceed its limit.'
+
     error_info = {
         'message': msg,
-        'code': error_code_map.get(type(e).__name__, type(e).__name__),
+        'code': error_code_map.get(type(e).__name__, 'MsSqlUnknownError'),
         'traceback': traceback.format_exc()
     }
     
