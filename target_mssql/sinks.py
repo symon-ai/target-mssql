@@ -97,7 +97,10 @@ class mssqlSink(SQLSink):
                 elif type(record[key]) is datetime.datetime:
                     record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                 elif 'number' in self.schema['properties'][key]['type']:
-                    record[key] = Decimal(record[key])
+                    try:
+                        record[key] = Decimal(record[key])
+                    except Exception:
+                        record[key] = None
         except Exception as e:
             self.error_info = generate_error_message(e)
             raise
@@ -135,7 +138,9 @@ class mssqlSink(SQLSink):
                 if 'number' in schema['properties'][column.name]['type']:
                     target_type = self.target_table_column_types.get(column.name)
                     # these types cannot have decimal places or we fail during insert
-                    if target_type == 'int' or target_type == 'bigint' or target_type == 'bit':
+                    if record.get(column.name) is None:
+                        insert_record.append(None)
+                    elif target_type == 'int' or target_type == 'bigint' or target_type == 'bit':
                         insert_record.append(int(record.get(column.name)))
                     else:
                         insert_record.append(str(record.get(column.name)))
