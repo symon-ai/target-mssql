@@ -37,6 +37,8 @@ def generate_error_message(e, details=None, parsed=None):
     # Convert error message into something more obvious
     if 'String or binary data would be truncated' in msg:
         msg = 'Attempting to insert data into one or more columns which exceed its limit.'
+    elif 'datetime data type resulted in an out-of-range value' in msg:
+        msg = 'Data contains out-of-range datetime value for SQL Server.'
 
     error_info = {
         'message': msg,

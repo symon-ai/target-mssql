@@ -8,10 +8,17 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
 
 import sqlalchemy
 from singer_sdk.helpers._conformers import replace_leading_digit
+from singer_sdk.helpers._typing import (
+    DatetimeErrorTreatmentEnum,
+    get_datelike_property_type,
+    handle_invalid_timestamp_in_record,
+)
 from singer_sdk.sinks import SQLConnector, SQLSink
 from sqlalchemy import Column
 import datetime
+from dateutil import parser
 from decimal import Decimal
+from copy import copy
 
 from target_mssql.connector import mssqlConnector
 from target_mssql.utils import generate_error_message, process_error_info
@@ -236,7 +243,7 @@ class mssqlSink(SQLSink):
             self.full_table_name
         )
         self.tmp_table_name = (
-            f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
+            f"{schema_name}.[#{table_name}]" if schema_name else f"[#{table_name}]"
         )
 
         # Insert into temp table
@@ -340,10 +347,15 @@ class mssqlSink(SQLSink):
         """
         self.logger.info("Cleaning up %s", self.stream_name)
 
+        db_name, schema_name, table_name = self.parse_full_table_name(
+            self.full_table_name
+        )
+        target_table_name = f"{schema_name}.[{table_name}]" if schema_name else f"[{table_name}]"
+
         if self.tmp_table_name is not None:
             self.drop_and_insert_from_table(
                 from_table_name=self.tmp_table_name,
-                to_table_name=self.full_table_name,
+                to_table_name=target_table_name,
             )
 
     def generate_insert_statement(
@@ -368,7 +380,7 @@ class mssqlSink(SQLSink):
             VALUES ({','.join('?' for _ in range(len(property_names)))})
         """
         return statement
-    
+
     def _validate_and_parse(self, record: dict) -> dict:
         """Validate or repair the record, parsing to python-native types as needed.
 
@@ -392,6 +404,41 @@ class mssqlSink(SQLSink):
         finally:
             process_error_info(self.error_info, self.config)
         return record
+    
+    def _parse_timestamps_in_record(
+        self,
+        record: dict,
+        schema: dict,
+        treatment: DatetimeErrorTreatmentEnum,
+    ) -> None:
+        """Parse strings to datetime.datetime values, repairing or erroring on failure.
+
+        Attempts to parse every field that is of type date/datetime/time. If its value
+        is out of range, repair logic will be driven by the `treatment` input arg:
+        MAX, NULL, or ERROR.
+        """
+        for key in record:
+            datelike_type = get_datelike_property_type(schema["properties"][key])
+            if datelike_type:
+                date_val = record[key]
+                try:
+                    if record[key] is not None:
+                        # empty dates transform to '' in tap
+                        if record[key] == '':
+                            record[key] = None
+                            continue
+                        date_val = parser.parse(date_val)
+                except parser.ParserError as ex:
+                    date_val = handle_invalid_timestamp_in_record(
+                        record,
+                        [key],
+                        date_val,
+                        datelike_type,
+                        ex,
+                        treatment,
+                        self.logger,
+                    )
+                record[key] = date_val
     
     @property
     def max_size(self) -> int:

@@ -176,34 +176,38 @@ class mssqlConnector(SQLConnector):
         for opt in sql_types:
             # Get the length
             opt_len: int = getattr(opt, "length", 0)
-            generic_type = type(opt.as_generic())
+            try:
+                generic_type = type(opt.as_generic())
 
-            if isinstance(generic_type, type):
-                if issubclass(
-                    generic_type,
-                    (sqlalchemy.types.String, sqlalchemy.types.Unicode),
-                ):
-                    # If length None or 0 then is varchar max ?
-                    if (
-                        (opt_len is None)
-                        or (opt_len == 0)
-                        or (opt_len >= current_type.length)
+                if isinstance(generic_type, type):
+                    if issubclass(
+                        generic_type,
+                        (sqlalchemy.types.String, sqlalchemy.types.Unicode),
                     ):
-                        return opt
-                elif isinstance(
-                    generic_type,
-                    (sqlalchemy.types.String, sqlalchemy.types.Unicode),
-                ):
-                    # If length None or 0 then is varchar max ?
-                    if (
-                        (opt_len is None)
-                        or (opt_len == 0)
-                        or (opt_len >= current_type.length)
+                        # If length None or 0 then is varchar max ?
+                        if (
+                            (opt_len is None)
+                            or (opt_len == 0)
+                            or (opt_len >= current_type.length)
+                        ):
+                            return opt
+                    elif isinstance(
+                        generic_type,
+                        (sqlalchemy.types.String, sqlalchemy.types.Unicode),
                     ):
+                        # If length None or 0 then is varchar max ?
+                        if (
+                            (opt_len is None)
+                            or (opt_len == 0)
+                            or (opt_len >= current_type.length)
+                        ):
+                            return opt
+                    # If best conversion class is equal to current type
+                    # return the best conversion class
+                    elif str(opt) == str(current_type):
                         return opt
-                # If best conversion class is equal to current type
-                # return the best conversion class
-                elif str(opt) == str(current_type):
+            except NotImplementedError:
+                if isinstance(opt, sqlalchemy.dialects.mssql.base.TIMESTAMP):
                     return opt
 
         raise ValueError(
@@ -375,10 +379,10 @@ class mssqlConnector(SQLConnector):
 
         db_name, schema_name, table_name = self.parse_full_table_name(from_table_name)
         full_table_name = (
-            f"{schema_name}.{table_name}" if schema_name else f"{table_name}"
+            f"{schema_name}.[{table_name}]" if schema_name else f"[{table_name}]"
         )
         tmp_table_name = (
-            f"{schema_name}.#{table_name}" if schema_name else f"#{table_name}"
+            f"{schema_name}.[#{table_name}]" if schema_name else f"[#{table_name}]"
         )
 
         stmt = f"""
