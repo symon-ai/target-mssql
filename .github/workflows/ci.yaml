@@ -1,6 +1,9 @@
 name: Target MSSQL tests
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   linting:
