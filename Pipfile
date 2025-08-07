@@ -8,7 +8,6 @@ requests = "==2.32.4"
 singer-sdk = "==0.48.0"
 pymssql = ">=2.2.5"
 pyodbc = ">=4.0.39"
-cryptography = ">=44.0.1"
 
 [dev-packages]
 pytest = ">=6.2.5"
