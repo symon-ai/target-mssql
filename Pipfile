@@ -5,12 +5,10 @@ name = "pypi"
 
 [packages]
 requests = "==2.32.4"
-singer-sdk = "==0.47.4"
+singer-sdk = "==0.48.0"
 pymssql = ">=2.2.5"
-urllib3 = "==1.26.20"
 pyodbc = ">=4.0.39"
-cryptography = "==44.0.1"
-setuptools = "==80.9.0"
+cryptography = ">=44.0.1"
 
 [dev-packages]
 pytest = ">=6.2.5"
@@ -23,4 +21,4 @@ types-requests = ">=2.26.1"
 isort = ">=5.10.1"
 
 [requires]
-python_version = "<3.11,>=3.7.1"
+python_version = "<3.11,>=3.9.1"
