@@ -18,6 +18,7 @@ pydocstyle = ">=6.1.1"
 mypy = ">=0.910"
 types-requests = ">=2.26.1"
 isort = ">=5.10.1"
+urllib3 = "==1.26.20"
 
 [requires]
 python_version = "<3.11,>=3.9.1"
