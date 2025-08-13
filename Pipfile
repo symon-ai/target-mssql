@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 requests = "==2.32.4"
-singer-sdk = "==0.48.0"
+singer-sdk = "==0.42.1"
 pymssql = ">=2.2.5"
 pyodbc = ">=4.0.39"
 
@@ -13,7 +13,7 @@ pyodbc = ">=4.0.39"
 pytest = ">=6.2.5"
 tox = ">=3.24.4"
 flake8 = ">=3.9.2"
-black = "==24.10.0"
+black = "==24.8.0"
 pydocstyle = ">=6.1.1"
 mypy = ">=0.910"
 types-requests = ">=2.26.1"
@@ -21,4 +21,4 @@ isort = ">=5.10.1"
 urllib3 = "==1.26.20"
 
 [requires]
-python_version = "<3.11,>=3.9.1"
+python_version = "<3.11,>=3.8"
