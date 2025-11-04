@@ -4,5 +4,6 @@
   "database": "DB-name",
   "username": "username",
   "password": "password",
-  "table_name": "dbo.table"
+  "table_name": "dbo.table",
+  "keep_out_of_bound_dates": true
 }
