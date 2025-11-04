@@ -58,6 +58,12 @@ class Targetmssql(SQLTarget):
             description="Use float data type for numbers (otherwise number type is used)",
             default=False,
         ),
+        th.Property(
+            "keep_out_of_bound_dates",
+            th.BooleanType,
+            description="Convert pandas out-of-bound dates to MSSQL limits (min: 1753-01-01, max: 9999-12-31 23:59:59.997)",
+            default=False,
+        ),
     ).to_dict()
 
     default_sink_class = mssqlSink
