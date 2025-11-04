@@ -26,6 +26,13 @@ from target_mssql.utils import generate_error_message, process_error_info
 if TYPE_CHECKING:
     from singer_sdk.plugin_base import PluginBase
 
+# Pandas timestamp range: 1677-09-21 to 2262-04-11
+PANDAS_MIN_DATE = datetime.datetime(1677, 9, 21, 0, 12, 43, 145224)
+PANDAS_MAX_DATE = datetime.datetime(2262, 4, 11, 23, 47, 16, 854775)
+# MSSQL datetime range: 1753-01-01 00:00:00.000 to 9999-12-31 23:59:59.997
+MSSQL_MIN_DATE = datetime.datetime(1753, 1, 1, 0, 0, 0, 0)
+MSSQL_MAX_DATE = datetime.datetime(9999, 12, 31, 23, 59, 59, 997000)
+
 
 class mssqlSink(SQLSink):
     """mssql target sink class."""
@@ -98,11 +105,21 @@ class mssqlSink(SQLSink):
         """
         try:
             keys = record.keys()
+            keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', False)
+            
             for key in keys:
                 if type(record[key]) in [list, dict]:
                     record[key] = json.dumps(record[key], default=str)
                 elif type(record[key]) is datetime.datetime:
-                    record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+                    if keep_out_of_bound_dates:
+                        if self._is_pandas_max_date(record[key]):
+                            record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        elif self._is_pandas_min_date(record[key]):
+                            record[key] = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        else:
+                            record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                 elif 'number' in self.schema['properties'][key]['type']:
                     try:
                         record[key] = Decimal(record[key])
@@ -115,6 +132,38 @@ class mssqlSink(SQLSink):
             process_error_info(self.error_info, self.config)
 
         return record
+    
+    def _is_pandas_max_date(self, date_value: datetime.datetime) -> bool:
+        """Check if a datetime value is approximately equal to pandas max date.
+        
+        Args:
+            date_value: The datetime value to check.
+            
+        Returns:
+            True if the date is approximately equal to pandas max date.
+        """
+        # Consider a date as pandas max if it's within 1 second of the pandas max timestamp
+        # This accounts for potential rounding differences
+        if date_value.year == 2262 and date_value.month == 4 and date_value.day == 11:
+            time_diff = abs((date_value - PANDAS_MAX_DATE).total_seconds())
+            return time_diff < 1.0
+        return False
+    
+    def _is_pandas_min_date(self, date_value: datetime.datetime) -> bool:
+        """Check if a datetime value is approximately equal to pandas min date.
+        
+        Args:
+            date_value: The datetime value to check.
+            
+        Returns:
+            True if the date is approximately equal to pandas min date.
+        """
+        # Consider a date as pandas min if it's within 1 second of the pandas min timestamp
+        # This accounts for potential rounding differences
+        if date_value.year == 1677 and date_value.month == 9 and date_value.day == 21:
+            time_diff = abs((date_value - PANDAS_MIN_DATE).total_seconds())
+            return time_diff < 1.0
+        return False
 
     def bulk_insert_records(
         self,
@@ -417,6 +466,8 @@ class mssqlSink(SQLSink):
         is out of range, repair logic will be driven by the `treatment` input arg:
         MAX, NULL, or ERROR.
         """
+        keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', False)
+        
         for key in record:
             datelike_type = get_datelike_property_type(schema["properties"][key])
             if datelike_type:
@@ -428,6 +479,13 @@ class mssqlSink(SQLSink):
                             record[key] = None
                             continue
                         date_val = parser.parse(date_val)
+                        
+                        # Check if parsed date is pandas out-of-bounds and should be converted
+                        if keep_out_of_bound_dates and isinstance(date_val, datetime.datetime):
+                            if self._is_pandas_max_date(date_val):
+                                date_val = MSSQL_MAX_DATE
+                            elif self._is_pandas_min_date(date_val):
+                                date_val = MSSQL_MIN_DATE
                 except parser.ParserError as ex:
                     date_val = handle_invalid_timestamp_in_record(
                         record,
