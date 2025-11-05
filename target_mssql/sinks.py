@@ -134,36 +134,40 @@ class mssqlSink(SQLSink):
         return record
     
     def _is_pandas_max_date(self, date_value: datetime.datetime) -> bool:
-        """Check if a datetime value is approximately equal to pandas max date.
+        """Check if date is at or beyond pandas max date.
         
         Args:
             date_value: The datetime value to check.
             
         Returns:
-            True if the date is approximately equal to pandas max date.
+            True if the date is at or beyond pandas max date (with 1 second tolerance).
         """
-        # Consider a date as pandas max if it's within 1 second of the pandas max timestamp
-        # This accounts for potential rounding differences
-        if date_value.year == 2262 and date_value.month == 4 and date_value.day == 11:
-            time_diff = abs((date_value - PANDAS_MAX_DATE).total_seconds())
-            return time_diff < 1.0
-        return False
+        # Return True if date is clearly beyond pandas max
+        if date_value > PANDAS_MAX_DATE:
+            return True
+        
+        # Return True if date is within 1 second before pandas max
+        # This accounts for potential rounding differences at the boundary
+        time_diff = (PANDAS_MAX_DATE - date_value).total_seconds()
+        return 0 <= time_diff < 1.0
     
     def _is_pandas_min_date(self, date_value: datetime.datetime) -> bool:
-        """Check if a datetime value is approximately equal to pandas min date.
+        """Check if date is at or before pandas min date.
         
         Args:
             date_value: The datetime value to check.
             
         Returns:
-            True if the date is approximately equal to pandas min date.
+            True if the date is at or before pandas min date (with 1 second tolerance).
         """
-        # Consider a date as pandas min if it's within 1 second of the pandas min timestamp
-        # This accounts for potential rounding differences
-        if date_value.year == 1677 and date_value.month == 9 and date_value.day == 21:
-            time_diff = abs((date_value - PANDAS_MIN_DATE).total_seconds())
-            return time_diff < 1.0
-        return False
+        # Return True if date is clearly before pandas min
+        if date_value < PANDAS_MIN_DATE:
+            return True
+        
+        # Return True if date is within 1 second after pandas min
+        # This accounts for potential rounding differences at the boundary
+        time_diff = (date_value - PANDAS_MIN_DATE).total_seconds()
+        return 0 <= time_diff < 1.0
 
     def bulk_insert_records(
         self,
