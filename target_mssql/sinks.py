@@ -29,6 +29,11 @@ if TYPE_CHECKING:
 # Pandas timestamp range: 1677-09-21 to 2262-04-11
 PANDAS_MIN_DATE = datetime.datetime(1677, 9, 21, 0, 12, 43, 145224)
 PANDAS_MAX_DATE = datetime.datetime(2262, 4, 11, 23, 47, 16, 854775)
+
+# Pandas boundaries with 1-second tolerance for comparison
+PANDAS_MIN_DATE_WITH_TOLERANCE = PANDAS_MIN_DATE + datetime.timedelta(seconds=1)
+PANDAS_MAX_DATE_WITH_TOLERANCE = PANDAS_MAX_DATE - datetime.timedelta(seconds=1)
+
 # MSSQL datetime range: 1753-01-01 00:00:00.000 to 9999-12-31 23:59:59.997
 MSSQL_MIN_DATE = datetime.datetime(1753, 1, 1, 0, 0, 0, 0)
 MSSQL_MAX_DATE = datetime.datetime(9999, 12, 31, 23, 59, 59, 997000)
@@ -142,14 +147,7 @@ class mssqlSink(SQLSink):
         Returns:
             True if the date is at or beyond pandas max date (with 1 second tolerance).
         """
-        # Return True if date is clearly beyond pandas max
-        if date_value > PANDAS_MAX_DATE:
-            return True
-        
-        # Return True if date is within 1 second before pandas max
-        # This accounts for potential rounding differences at the boundary
-        time_diff = (PANDAS_MAX_DATE - date_value).total_seconds()
-        return 0 <= time_diff < 1.0
+        return date_value >= PANDAS_MAX_DATE_WITH_TOLERANCE
     
     def _is_pandas_min_date(self, date_value: datetime.datetime) -> bool:
         """Check if date is at or before pandas min date.
@@ -160,14 +158,7 @@ class mssqlSink(SQLSink):
         Returns:
             True if the date is at or before pandas min date (with 1 second tolerance).
         """
-        # Return True if date is clearly before pandas min
-        if date_value < PANDAS_MIN_DATE:
-            return True
-        
-        # Return True if date is within 1 second after pandas min
-        # This accounts for potential rounding differences at the boundary
-        time_diff = (date_value - PANDAS_MIN_DATE).total_seconds()
-        return 0 <= time_diff < 1.0
+        return date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE
 
     def bulk_insert_records(
         self,
