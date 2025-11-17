@@ -31,8 +31,8 @@ PANDAS_MIN_DATE = datetime.datetime(1677, 9, 21, 0, 12, 43, 145224)
 PANDAS_MAX_DATE = datetime.datetime(2262, 4, 11, 23, 47, 16, 854775)
 
 # Pandas boundaries with 1-second tolerance for comparison
-PANDAS_MIN_DATE_WITH_TOLERANCE = PANDAS_MIN_DATE + datetime.timedelta(seconds=1)
-PANDAS_MAX_DATE_WITH_TOLERANCE = PANDAS_MAX_DATE - datetime.timedelta(seconds=1)
+PANDAS_MIN_DATE_WITH_TOLERANCE = PANDAS_MIN_DATE + datetime.timedelta(seconds=5)
+PANDAS_MAX_DATE_WITH_TOLERANCE = PANDAS_MAX_DATE - datetime.timedelta(seconds=5)
 
 # MSSQL datetime range: 1753-01-01 00:00:00.000 to 9999-12-31 23:59:59.997
 MSSQL_MIN_DATE = datetime.datetime(1753, 1, 1, 0, 0, 0, 0)
