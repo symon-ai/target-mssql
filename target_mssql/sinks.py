@@ -110,7 +110,7 @@ class mssqlSink(SQLSink):
         """
         try:
             keys = record.keys()
-            keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', False)
+            keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', True)
             
             for key in keys:
                 if type(record[key]) in [list, dict]:
@@ -461,7 +461,7 @@ class mssqlSink(SQLSink):
         is out of range, repair logic will be driven by the `treatment` input arg:
         MAX, NULL, or ERROR.
         """
-        keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', False)
+        keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', True)
         
         for key in record:
             datelike_type = get_datelike_property_type(schema["properties"][key])
