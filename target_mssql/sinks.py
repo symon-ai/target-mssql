@@ -115,7 +115,7 @@ class mssqlSink(SQLSink):
             for key in keys:
                 if type(record[key]) in [list, dict]:
                     record[key] = json.dumps(record[key], default=str)
-                elif type(record[key]) is datetime.datetime:
+                elif isinstance(record[key], datetime.datetime) or (type(record[key]) is datetime.datetime):
                     if keep_out_of_bound_dates:
                         if self._is_pandas_max_date(record[key]):
                             record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
