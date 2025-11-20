@@ -138,7 +138,8 @@ class mssqlSink(SQLSink):
         """
         try:
             keys = record.keys()
-            keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', True)
+            # Hardcoded to True for testing
+            keep_out_of_bound_dates = True  # self.config.get('keep_out_of_bound_dates', True)
 
             for key in keys:
                 self.logger.info(f'1. record[key]: {record[key]}.')
@@ -478,7 +479,8 @@ class mssqlSink(SQLSink):
         is out of range, repair logic will be driven by the `treatment` input arg:
         MAX, NULL, or ERROR.
         """
-        keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', True)
+        # Hardcoded to True for testing
+        keep_out_of_bound_dates = True  # self.config.get('keep_out_of_bound_dates', True)
         
         for key in record:
             datelike_type = get_datelike_property_type(schema["properties"][key])
