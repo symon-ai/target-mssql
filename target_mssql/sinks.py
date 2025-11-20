@@ -107,10 +107,14 @@ class mssqlSink(SQLSink):
             date_value: The datetime value to check.
             
         Returns:
-            True if the date is at or beyond pandas max date.
+            True if the date is at or beyond pandas max date (with 5 second tolerance).
         """
+        # Strip timezone for comparison if present
+        if date_value.tzinfo is not None:
+            date_value = date_value.replace(tzinfo=None)
+        
         self.logger.info(f'_is_pandas_max_date date_value: {date_value}.')
-        self.logger.info(f'Comparison: {date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE}')
+        self.logger.info(f'Comparison: {date_value} >= {PANDAS_MAX_DATE_WITH_TOLERANCE} = {date_value >= PANDAS_MAX_DATE_WITH_TOLERANCE}')
 
         return date_value >= PANDAS_MAX_DATE_WITH_TOLERANCE
     
@@ -121,10 +125,14 @@ class mssqlSink(SQLSink):
             date_value: The datetime value to check.
             
         Returns:
-            True if the date is at or before pandas min date.
+            True if the date is at or before pandas min date (with 5 second tolerance).
         """
+        # Strip timezone for comparison if present
+        if date_value.tzinfo is not None:
+            date_value = date_value.replace(tzinfo=None)
+        
         self.logger.info(f'_is_pandas_min_date date_value: {date_value}.')
-        self.logger.info(f'Comparison: {date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE}')
+        self.logger.info(f'Comparison: {date_value} <= {PANDAS_MIN_DATE_WITH_TOLERANCE} = {date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE}')
 
         return date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE
 
