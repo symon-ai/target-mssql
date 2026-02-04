@@ -160,11 +160,11 @@ class mssqlSink(SQLSink):
                 elif isinstance(record[key], datetime.datetime) or (type(record[key]) is datetime.datetime):
                     if keep_out_of_bound_dates:
                         if self._is_pandas_max_date(record[key]):
-                            self.logger.info(f'5. record[key] is pandas max date, converting to MSSQL_MAX_DATE: {MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]}.')
-                            record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                            self.logger.info(f'5. record[key] is pandas max date, converting to MSSQL_MAX_DATE: {MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")}.')
+                            record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")
                         elif self._is_pandas_min_date(record[key]):
-                            self.logger.info(f'5. record[key] is pandas min date, converting to MSSQL_MIN_DATE: {MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]}.')
-                            record[key] = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                            self.logger.info(f'5. record[key] is pandas min date, converting to MSSQL_MIN_DATE: {MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")}.')
+                            record[key] = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")
                         else:
                             self.logger.info(f'5. record[key] is not out of bounds, converting to string: {record[key].strftime("%Y-%m-%d %H:%M:%S")}.')
                             record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
