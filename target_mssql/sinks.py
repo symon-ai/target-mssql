@@ -149,30 +149,19 @@ class mssqlSink(SQLSink):
             keep_out_of_bound_dates = self.config.get('keep_out_of_bound_dates', False)
 
             for key in keys:
-                self.logger.info(f'1. record[key]: {record[key]}.')
-                self.logger.info(f'2. isinstance: {isinstance(record[key], datetime.datetime)}.')
-                self.logger.info(f'3. type(record[key]): {type(record[key])}.')
-                self.logger.info(f'4. type(record[key]) is datetime.datetime: {type(record[key]) is datetime.datetime}.')
-
                 if type(record[key]) in [list, dict]:
-                    self.logger.info(f'5. record[key] is list or dict, converting to JSON: {json.dumps(record[key], default=str)}.')
                     record[key] = json.dumps(record[key], default=str)
                 elif isinstance(record[key], datetime.datetime) or (type(record[key]) is datetime.datetime):
                     if keep_out_of_bound_dates:
                         if self._is_pandas_max_date(record[key]):
-                            self.logger.info(f'5. record[key] is pandas max date, converting to MSSQL_MAX_DATE: {MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")}.')
-                            record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")
+                            record[key] = MSSQL_MAX_DATE.isoformat()
                         elif self._is_pandas_min_date(record[key]):
-                            self.logger.info(f'5. record[key] is pandas min date, converting to MSSQL_MIN_DATE: {MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")}.')
-                            record[key] = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")
+                            record[key] = MSSQL_MIN_DATE.isoformat()
                         else:
-                            self.logger.info(f'5. record[key] is not out of bounds, converting to string: {record[key].strftime("%Y-%m-%d %H:%M:%S")}.')
-                            record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+                            record[key] = record[key].isoformat()
                     else:
-                        self.logger.info(f'5. keep_out_of_bound_dates is False, converting to string: {record[key].strftime("%Y-%m-%d %H:%M:%S")}.')
-                        record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
+                        record[key] = record[key].isoformat()
                 elif 'number' in self.schema['properties'][key]['type']:
-                    self.logger.info(f'5. record[key] is number, converting to Decimal: {record[key]}.')
                     try:
                         record[key] = Decimal(record[key])
                     except Exception:
