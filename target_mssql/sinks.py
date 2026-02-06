@@ -474,9 +474,6 @@ class mssqlSink(SQLSink):
         for key in record:
             datelike_type = get_datelike_property_type(schema["properties"][key])
 
-            self.logger.info(f'1. _parse_timestamps_in_record key: {key}.')
-            self.logger.info(f'2. _parse_timestamps_in_record datelike_type: {datelike_type}.')
-
             if datelike_type:
                 date_val = record[key]
                 try:
@@ -487,10 +484,6 @@ class mssqlSink(SQLSink):
                             continue
                         date_val = parser.parse(date_val)
 
-                        self.logger.info(f'3. date_val: {date_val}.')
-                        self.logger.info(f'4. keep_out_of_bound_dates: {keep_out_of_bound_dates}.')
-                        self.logger.info(f'5. isinstance: {isinstance(date_val, datetime.datetime)}.')
-                        
                         # Check if parsed date is pandas out-of-bounds and should be converted
                         if keep_out_of_bound_dates and isinstance(date_val, datetime.datetime):
                             if self._is_pandas_max_date(date_val):
@@ -498,10 +491,7 @@ class mssqlSink(SQLSink):
                             elif self._is_pandas_min_date(date_val):
                                 date_val = MSSQL_MIN_DATE
 
-                            self.logger.info(f'6. date_val: {date_val}.')
-
                 except parser.ParserError as ex:
-                    self.logger.info(f'7. parser.ParserError: {ex}.')
                     date_val = handle_invalid_timestamp_in_record(
                         record,
                         [key],
@@ -511,7 +501,6 @@ class mssqlSink(SQLSink):
                         treatment,
                         self.logger,
                     )
-                    self.logger.info(f'8. date_val: {date_val}.')
                 record[key] = date_val
     
     @property
