@@ -113,9 +113,6 @@ class mssqlSink(SQLSink):
         if date_value.tzinfo is not None:
             date_value = date_value.replace(tzinfo=None)
         
-        self.logger.info(f'_is_pandas_max_date date_value: {date_value}.')
-        self.logger.info(f'Comparison: {date_value} >= {PANDAS_MAX_DATE_WITH_TOLERANCE} = {date_value >= PANDAS_MAX_DATE_WITH_TOLERANCE}')
-
         return date_value >= PANDAS_MAX_DATE_WITH_TOLERANCE
     
     def _is_pandas_min_date(self, date_value: datetime.datetime) -> bool:
@@ -131,9 +128,6 @@ class mssqlSink(SQLSink):
         if date_value.tzinfo is not None:
             date_value = date_value.replace(tzinfo=None)
         
-        self.logger.info(f'_is_pandas_min_date date_value: {date_value}.')
-        self.logger.info(f'Comparison: {date_value} <= {PANDAS_MIN_DATE_WITH_TOLERANCE} = {date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE}')
-
         return date_value <= PANDAS_MIN_DATE_WITH_TOLERANCE
 
     def preprocess_record(self, record: dict, context: dict) -> dict:
@@ -154,13 +148,13 @@ class mssqlSink(SQLSink):
                 elif isinstance(record[key], datetime.datetime) or (type(record[key]) is datetime.datetime):
                     if keep_out_of_bound_dates:
                         if self._is_pandas_max_date(record[key]):
-                            record[key] = MSSQL_MAX_DATE.isoformat()
+                            record[key] = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")
                         elif self._is_pandas_min_date(record[key]):
-                            record[key] = MSSQL_MIN_DATE.isoformat()
+                            record[key] = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")
                         else:
-                            record[key] = record[key].isoformat()
+                            record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                     else:
-                        record[key] = record[key].isoformat()
+                        record[key] = record[key].strftime("%Y-%m-%d %H:%M:%S")
                 elif 'number' in self.schema['properties'][key]['type']:
                     try:
                         record[key] = Decimal(record[key])
