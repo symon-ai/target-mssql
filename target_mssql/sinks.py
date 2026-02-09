@@ -487,9 +487,9 @@ class mssqlSink(SQLSink):
                         # Check if parsed date is pandas out-of-bounds and should be converted
                         if keep_out_of_bound_dates and isinstance(date_val, datetime.datetime):
                             if self._is_pandas_max_date(date_val):
-                                date_val = MSSQL_MAX_DATE
+                                date_val = MSSQL_MAX_DATE.strftime("%Y-%m-%d %H:%M:%S")
                             elif self._is_pandas_min_date(date_val):
-                                date_val = MSSQL_MIN_DATE
+                                date_val = MSSQL_MIN_DATE.strftime("%Y-%m-%d %H:%M:%S")
 
                 except parser.ParserError as ex:
                     date_val = handle_invalid_timestamp_in_record(
