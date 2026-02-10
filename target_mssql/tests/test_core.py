@@ -267,3 +267,35 @@ def test_insert_merge(mssql_target):
 
     file_name = "insert_merge_part2.singer"
     singer_file_to_target(file_name, mssql_target)
+
+
+# def test_keep_out_of_bound_dates_enabled():
+#     """Test that pandas out-of-bound dates (min/max) are converted to MSSQL dates when keep_out_of_bound_dates is True."""
+#     config_with_flag = {
+#         "username": "sa",
+#         "password": "P@55w0rd",
+#         "host": "localhost",
+#         "port": "1433",
+#         "database": "master",
+#         "table_prefix": "prfx_",
+#         "keep_out_of_bound_dates": True,
+#     }
+#     target = Targetmssql(config=config_with_flag)
+#     file_name = "out_of_bound_dates_test.singer"
+#     singer_file_to_target(file_name, target)
+
+
+# def test_keep_out_of_bound_dates_disabled():
+#     """Test that pandas out-of-bound dates are not converted when keep_out_of_bound_dates is False."""
+#     config_without_flag = {
+#         "username": "sa",
+#         "password": "P@55w0rd",
+#         "host": "localhost",
+#         "port": "1433",
+#         "database": "master",
+#         "table_prefix": "prfx_",
+#         "keep_out_of_bound_dates": False,
+#     }
+#     target = Targetmssql(config=config_without_flag)
+#     file_name = "out_of_bound_dates_test.singer"
+#     singer_file_to_target(file_name, target)

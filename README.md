@@ -34,6 +34,7 @@ Regarding connection info, either the `sqlalchemy_url` or `username`, `password`
 | default_target_schema     |  False   |  None   | Default target schema to write to                                                                                                           |
 | table_name                |   True   |  None   | Target table name, can include schema name e.g. dbo.table_name or just table_name                                                           |
 | prefer_float_over_numeric |  False   |    0    | Use float data type for numbers (otherwise number type is used)                                                                             |
+| keep_out_of_bound_dates   |  False   |  False  | Convert pandas out-of-bound dates to MSSQL limits (min: 1753-01-01, max: 9999-12-31 23:59:59.997)                                          |
 | stream_maps               |  False   |  None   | Config object for stream maps capability. For more information check out [Stream Maps](https://sdk.meltano.com/en/latest/stream_maps.html). |
 | stream_map_config         |  False   |  None   | User-defined config values to be used within map expressions.                                                                               |
 | flattening_enabled        |  False   |  None   | 'True' to enable schema flattening and automatically expand nested properties.                                                              |
