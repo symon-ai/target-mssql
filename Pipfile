@@ -4,21 +4,40 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-requests = "==2.28.0"
-singer-sdk = "==0.13.0"
-pymssql = ">=2.2.5"
-urllib3 = "==1.26.15"
-pyodbc = ">=4.0.39"
+attrs = {version = "==25.4.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+certifi = {version = "==2026.1.4", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+charset-normalizer = {version = "==3.4.4", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+click = {version = "==8.3.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+colorama = {version = "==0.4.6", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\" and platform_system == \"Windows\""}
+fsspec = {version = "==2026.2.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+greenlet = {version = "==3.3.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\" and (platform_machine == \"win32\" or platform_machine == \"WIN32\" or platform_machine == \"AMD64\" or platform_machine == \"amd64\" or platform_machine == \"x86_64\" or platform_machine == \"ppc64le\" or platform_machine == \"aarch64\")"}
+idna = {version = "==3.11", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+inflection = {version = "==0.5.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+joblib = {version = "==1.5.3", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+jsonpath-ng = {version = "==1.7.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+jsonschema-specifications = {version = "==2025.9.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+jsonschema = {version = "==4.26.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+packaging = {version = "==26.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+pathlib-abc = {version = "==0.5.2", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+ply = {version = "==3.11", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+pymssql = {version = "==2.3.12", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+pyodbc = {version = "==5.3.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+python-backoff = {version = "==2.3.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+python-dotenv = {version = "==1.2.1", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+pyyaml = {version = "==6.0.3", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+referencing = {version = "==0.37.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+requests = {version = "==2.32.5", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+rpds-py = {version = "==0.30.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+simpleeval = {version = "==1.0.3", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+simplejson = {version = "==3.20.2", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+singer-sdk = {version = "==0.53.5", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+sqlalchemy = {version = "==2.0.46", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+typing-extensions = {version = "==4.15.0", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+universal-pathlib = {version = "==0.3.9", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
+urllib3 = {version = "==2.6.3", markers = "python_full_version >= \"3.13.0\" and python_full_version < \"4.0.0\""}
 
 [dev-packages]
-pytest = ">=6.2.5"
-tox = ">=3.24.4"
-flake8 = ">=3.9.2"
-black = ">=22.9"
-pydocstyle = ">=6.1.1"
-mypy = ">=0.910"
-types-requests = ">=2.26.1"
-isort = ">=5.10.1"
 
 [requires]
-python_version = "<3.11,>=3.7.1"
+python_version = "3.13"
+python_full_version = "3.13.3"

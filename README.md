@@ -46,18 +46,37 @@ Regarding connection info, either the `sqlalchemy_url` or `username`, `password`
 cat /path/to/row-file | target-mssql --config config.json
 ```
 
-## Developer Resources
+## Package manager
 
-Follow these instructions to contribute to this project.
-
-### Initialize your Development Environment
-
-```bash
-poetry shell
-poetry install
+We only use poetry to manage our packages. Pipfile is there because our code scan doesn't support poetry.lock. So we do the following hack to generate Pipfile and Pipfile.lock based on our poetry.lock:
+### 1. Export all dependencies from poetry.lock to requirements.txt
+```
+poetry export -f requirements.txt --output requirements.txt --without-hashes
+```
+### 1b. (Optional) Make sure pipenv has the right python version
+Check:
+```
+pipenv --support
+```
+Install:
+```
+python -m pip install --user pipenv
 ```
 
-### SDK Dev Guide
+# 2. Generate Pipfile and Pipfile.lock from requirements.txt (make sure you pass in right version of python)
+```
+pipenv install --python 3.13 -r requirements.txt
+```
+
+Check that the required python version in the Pipfile matches your expected python version. For some reason even if requirements.txt specify the right python version pipenv can still default to a different version based on the some stale versioning in the venv. In which case, do the following:
+
+### 1. Delete the Pipfile and lock, and deactivate your venv
+
+### 2. Delete the venv with `pipenv --rm`
+
+### 3. Re-run the pipenv install command
+
+## SDK Dev Guide
 
 See the [dev guide](https://sdk.meltano.com/en/latest/dev_guide.html) for more instructions on how to use the Meltano SDK to
 develop your own Singer taps and targets.
