@@ -13,7 +13,7 @@ from singer_sdk.helpers._typing import (
     get_datelike_property_type,
     handle_invalid_timestamp_in_record,
 )
-from singer_sdk.sinks import SQLConnector, SQLSink
+from singer_sdk.sql import SQLConnector, SQLSink
 from sqlalchemy import Column
 import datetime
 from dateutil import parser
@@ -74,6 +74,17 @@ class mssqlSink(SQLSink):
         return self._connector
 
     @property
+    def table_name(self) -> str:
+        """Return the table name with no schema or database part.
+
+        Returns:
+            The target table name.
+        """
+        if self._config.get("table_name"):
+            return self._config["table_name"].split(".")[-1]
+        return super().table_name
+
+    @property
     def schema_name(self) -> Optional[str]:
         """Return the schema name or `None` if using names with no schema part.
 
@@ -82,11 +93,16 @@ class mssqlSink(SQLSink):
         """
 
         default_target_schema = self.config.get("default_target_schema", None)
-        parts = self.stream_name.split("-")
 
         if default_target_schema:
             return default_target_schema
 
+        if self._config.get("table_name"):
+            parts = self._config["table_name"].split(".")
+            if len(parts) >= 2:
+                return parts[-2]
+
+        parts = self.stream_name.split("-")
         if len(parts) in {2, 3}:
             # Stream name is a two-part or three-part identifier.
             # Use the second-to-last part as the schema name.
@@ -215,15 +231,15 @@ class mssqlSink(SQLSink):
 
         try:
             # use the underlying cursor to execute this insert for better performance
-            cursor = self.connection.connection.cursor()
+            cursor = self.connector.active_connection.connection.cursor()
             cursor.fast_executemany = True
             cursor.executemany(insert_sql, insert_records)
-            self.connection.connection.commit()
+            self.connector.active_connection.connection.commit()
 
             self.row_count += len(records)
             self.logger.info(f'Rows processed: {self.row_count}.')
         except Exception as e:
-            msg = re.search("\[ODBC Driver 18 for SQL Server\]\[SQL Server\](.*) \([0-9]*\) \(SQLExecute\)", str(e))
+            msg = re.search(r"\[ODBC Driver 18 for SQL Server\]\[SQL Server\](.*) \([0-9]*\) \(SQLExecute\)", str(e))
             if msg is not None:
                 self.error_info = generate_error_message(e, None, msg.group(1).replace('#', ''))
                 raise
@@ -281,6 +297,7 @@ class mssqlSink(SQLSink):
             )
             self.table_prepared = True
 
+        self.connector.open_connection()
         if self.tmp_table_name is None:
             # Create a temp table (Creates from the table above)
             self.logger.info(f"Creating temp table for {self.full_table_name}")
@@ -340,8 +357,9 @@ class mssqlSink(SQLSink):
                 COMMIT TRANSACTION;
             """
 
-        with self.connection.begin():
-            self.connection.execute(sql_stmt)
+        conn = self.connector.active_connection
+        conn.execute(sqlalchemy.text(sql_stmt))
+        conn.commit()
 
     def parse_full_table_name(
         self, full_table_name: str
@@ -404,11 +422,14 @@ class mssqlSink(SQLSink):
         )
         target_table_name = f"{schema_name}.[{table_name}]" if schema_name else f"[{table_name}]"
 
-        if self.tmp_table_name is not None:
-            self.drop_and_insert_from_table(
-                from_table_name=self.tmp_table_name,
-                to_table_name=target_table_name,
-            )
+        try:
+            if self.tmp_table_name is not None:
+                self.drop_and_insert_from_table(
+                    from_table_name=self.tmp_table_name,
+                    to_table_name=target_table_name,
+                )
+        finally:
+            self.connector.close_connection()
 
     def generate_insert_statement(
         self,
