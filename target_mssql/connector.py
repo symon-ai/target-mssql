@@ -4,8 +4,9 @@ from typing import Any, Dict, Iterable, List, Optional, cast
 import typing as t
 
 import sqlalchemy
+import urllib.parse
 from singer_sdk.helpers._typing import get_datelike_property_type
-from singer_sdk.sinks import SQLConnector
+from singer_sdk.sql import SQLConnector
 from sqlalchemy.dialects import mssql
 from target_mssql.utils import raise_error
 
@@ -21,6 +22,30 @@ class mssqlConnector(SQLConnector):
     allow_column_alter: bool = False  # Whether altering column types is supported.
     allow_merge_upsert: bool = True  # Whether MERGE UPSERT is supported.
     allow_temp_tables: bool = True  # Whether temp tables are supported.
+
+    def __init__(self, config=None, sqlalchemy_url=None):
+        super().__init__(config=config, sqlalchemy_url=sqlalchemy_url)
+        self._persistent_connection = None
+
+    def open_connection(self) -> None:
+        """Open and cache a single connection for the duration of a batch."""
+        if self._persistent_connection is None:
+            self._persistent_connection = self._engine.connect().execution_options(
+                stream_results=True
+            )
+
+    def close_connection(self) -> None:
+        """Close and discard the cached connection."""
+        if self._persistent_connection is not None:
+            self._persistent_connection.close()
+            self._persistent_connection = None
+
+    @property
+    def active_connection(self):
+        """Return the cached connection, opening one if needed."""
+        if self._persistent_connection is not None:
+            return self._persistent_connection
+        return self._engine.connect().execution_options(stream_results=True)
 
     def create_table_with_records(
         self,
@@ -65,16 +90,16 @@ class mssqlConnector(SQLConnector):
         if config.get("sqlalchemy_url"):
             return config["sqlalchemy_url"]
 
-        connection_url = sqlalchemy.engine.url.URL.create(
-            drivername="mssql+pyodbc",
-            username=config["username"],
-            password=config["password"],
-            host=config["host"],
-            port=config["port"],
-            database=config["database"],
-            query={'DRIVER': 'ODBC Driver 18 for SQL Server', 'TrustServerCertificate': 'yes'}
+        odbc_conn_str = (
+            "DRIVER={ODBC Driver 18 for SQL Server};"
+            f"SERVER={config['host']},{config['port']};"
+            f"DATABASE={config['database']};"
+            f"UID={config['username']};"
+            f"PWD={config['password']};"
+            "TrustServerCertificate=yes;"
         )
-        return str(connection_url)
+        params = urllib.parse.quote_plus(odbc_conn_str)
+        return f"mssql+pyodbc:///?odbc_connect={params}"
 
     def create_empty_table(
         self,
@@ -254,9 +279,9 @@ class mssqlConnector(SQLConnector):
             raise_error(error_info, self.config)
 
         try:
-            self.connection.execute(
-                f"""ALTER TABLE { str(full_table_name) }
-                ALTER COLUMN { str(column_name) } { str(compatible_sql_type) }"""
+            self.active_connection.execute(
+                sqlalchemy.text(f"""ALTER TABLE { str(full_table_name) }
+                ALTER COLUMN { str(column_name) } { str(compatible_sql_type) }""")
             )
         except Exception as e:
             raise RuntimeError(
@@ -294,9 +319,9 @@ class mssqlConnector(SQLConnector):
         )
 
         try:
-            self.connection.execute(
-                f"""ALTER TABLE { str(full_table_name) }
-                ADD { str(create_column_clause) } """
+            self.active_connection.execute(
+                sqlalchemy.text(f"""ALTER TABLE { str(full_table_name) }
+                ADD { str(create_column_clause) } """)
             )
 
         except Exception as e:
@@ -391,7 +416,7 @@ class mssqlConnector(SQLConnector):
             FROM {full_table_name}
         """
 
-        self.connection.execute(stmt)
+        self.active_connection.execute(sqlalchemy.text(stmt))
 
     def get_target_table_column_types(self, from_table_name):
         db_name, schema_name, table_name = self.parse_full_table_name(from_table_name)
@@ -400,7 +425,7 @@ class mssqlConnector(SQLConnector):
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = '{schema_name}' and TABLE_NAME = '{table_name}';
         """
-        result = self.connection.execute(stmt)
+        result = self.active_connection.execute(sqlalchemy.text(stmt))
         target_table_schema = {}
         for row in result:
             target_table_schema[row[0]] = row[1]
@@ -409,7 +434,7 @@ class mssqlConnector(SQLConnector):
     def has_alter_permission(self, to_table_name):
         sql_stmt = f"SELECT HAS_PERMS_BY_NAME('{to_table_name}', 'OBJECT', 'ALTER')"
         try:
-            result = self.connection.execute(sql_stmt)
+            result = self.active_connection.execute(sqlalchemy.text(sql_stmt))
             for row in result:
                 if row[0] == 1:
                     return True

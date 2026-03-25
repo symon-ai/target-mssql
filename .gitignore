@@ -146,3 +146,5 @@ _jottings.py
 .security-notes.json
 
 test_data/
+.python-version
+requirements.txt
