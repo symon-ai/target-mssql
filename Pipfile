@@ -35,7 +35,7 @@ six = "==1.17.0"
 sqlalchemy = "==2.0.47"
 typing-extensions = "==4.15.0"
 universal-pathlib = "==0.3.10"
-urllib3 = "==2.6.3"
+urllib3 = "==2.7.0"
 
 [dev-packages]
 
